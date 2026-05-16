@@ -2,11 +2,10 @@
 
 When not signed in:  only the Sign-in page is in the nav.
 When signed in:      Dashboard · Create · Preview · Manage · Account
-                     (+ Admin tab if the user is_admin OR ADMIN_PASSWORD is set)
+                     (+ Admin tab ONLY for users flagged is_admin = 1 in DB)
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -50,8 +49,10 @@ else:
         st.Page(str(THIS_DIR / "views" / "manage.py"),    title="Manage",    icon="🎛️"),
         st.Page(str(THIS_DIR / "views" / "account.py"),   title="Account",   icon="⚙️"),
     ]
-    # Admin tab — visible only to admins, or to anyone if ADMIN_PASSWORD set
-    if me.get("is_admin") or os.environ.get("ADMIN_PASSWORD"):
+    # Admin tab — visible ONLY to users flagged is_admin = 1 in the DB.
+    # ADMIN_PASSWORD acts as a backup gate inside admin.py for emergency access
+    # via direct URL, but the tab itself never appears in the nav for customers.
+    if me.get("is_admin"):
         pages.append(st.Page(str(THIS_DIR / "views" / "admin.py"), title="Admin", icon="🛡️"))
 
 nav = st.navigation(pages, position="top")
