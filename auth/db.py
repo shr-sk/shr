@@ -1,8 +1,13 @@
 """SQLite layer (local) / Turso layer (production) — same API both ways.
 
 The adapter chooses backend by env:
-  • TURSO_DATABASE_URL set → libsql HTTP client to cloud
+  • TURSO_DATABASE_URL set → direct HTTP calls to Turso's Hrana 3 endpoint
   • Otherwise              → local file at Meta_Ads/data/meta_ads.db
+
+We bypass the `libsql-client` Python package because its current release
+(0.3.1) still negotiates the old WebSocket Hrana 2 protocol, which Turso
+servers no longer accept (they answer the WS handshake with HTTP 505).
+Instead we POST to /v2/pipeline with the standard `requests` library.
 
 The rest of the codebase calls high-level functions (create_user,
 find_user_by_email, …) that internally use _execute / _fetchone / _fetchall
@@ -10,6 +15,7 @@ helpers — those handle the two backends transparently.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sqlite3
@@ -26,19 +32,83 @@ def _is_turso() -> bool:
     return bool(os.environ.get("TURSO_DATABASE_URL"))
 
 
-_turso_client = None
+# ---------- Turso HTTP client (no WebSocket) ----------
+
+def _turso_http_url() -> str:
+    """Translate `libsql://<host>` to `https://<host>/v2/pipeline`."""
+    raw = os.environ["TURSO_DATABASE_URL"].strip()
+    if raw.startswith("libsql://"):
+        raw = "https://" + raw[len("libsql://"):]
+    elif raw.startswith("wss://"):
+        raw = "https://" + raw[len("wss://"):]
+    return raw.rstrip("/") + "/v2/pipeline"
 
 
-def _turso():
-    """Lazy-init the libsql HTTP client. Single global instance."""
-    global _turso_client
-    if _turso_client is None:
-        from libsql_client import create_client_sync  # type: ignore[import-not-found]
-        _turso_client = create_client_sync(
-            url=os.environ["TURSO_DATABASE_URL"],
-            auth_token=os.environ.get("TURSO_AUTH_TOKEN", ""),
-        )
-    return _turso_client
+def _to_hrana_arg(value) -> dict:
+    """Convert a Python value into the JSON shape Turso's Hrana protocol wants."""
+    if value is None:
+        return {"type": "null"}
+    if isinstance(value, bool):
+        return {"type": "integer", "value": "1" if value else "0"}
+    if isinstance(value, int):
+        return {"type": "integer", "value": str(value)}
+    if isinstance(value, float):
+        return {"type": "float", "value": value}
+    if isinstance(value, bytes):
+        return {"type": "blob", "base64": base64.b64encode(value).decode("ascii")}
+    return {"type": "text", "value": str(value)}
+
+
+def _from_hrana_cell(cell):
+    """Convert a Hrana cell back into a Python value."""
+    t = cell.get("type")
+    if t == "null":
+        return None
+    if t == "integer":
+        return int(cell["value"])
+    if t == "float":
+        return float(cell["value"])
+    if t == "text":
+        return cell["value"]
+    if t == "blob":
+        return base64.b64decode(cell["base64"]) if "base64" in cell else b""
+    return cell.get("value")
+
+
+def _turso_request(sql: str, params: tuple) -> dict:
+    """Send one statement via Turso's HTTP pipeline endpoint."""
+    import requests  # type: ignore[import-not-found]
+    body = {
+        "requests": [
+            {
+                "type": "execute",
+                "stmt": {
+                    "sql": sql,
+                    "args": [_to_hrana_arg(v) for v in params],
+                },
+            },
+            {"type": "close"},
+        ]
+    }
+    response = requests.post(
+        _turso_http_url(),
+        headers={
+            "Authorization": f"Bearer {os.environ.get('TURSO_AUTH_TOKEN', '')}",
+            "Content-Type": "application/json",
+        },
+        data=json.dumps(body),
+        timeout=20,
+    )
+    response.raise_for_status()
+    data = response.json()
+    first = data.get("results", [{}])[0]
+    if first.get("type") != "ok":
+        err = first.get("error", {}) or first.get("response", {})
+        raise RuntimeError(f"Turso error: {err}")
+    # `response.result` shape:
+    #   {"cols": [{"name": "id", ...}], "rows": [[cell, ...], ...],
+    #    "affected_row_count": 0, "last_insert_rowid": "1" | None}
+    return first["response"]["result"]
 
 
 # ---------- Unified execute helpers ----------
@@ -53,11 +123,11 @@ def _execute(sql: str, params: tuple | list | None = None) -> dict:
     """Run a single statement. Returns {"lastrowid": int|None, "rowcount": int}."""
     params = _params_tuple(params)
     if _is_turso():
-        client = _turso()
-        result = client.execute(sql, params)
+        result = _turso_request(sql, params)
+        lrid = result.get("last_insert_rowid")
         return {
-            "lastrowid": getattr(result, "last_insert_rowid", None),
-            "rowcount": getattr(result, "rows_affected", 0),
+            "lastrowid": int(lrid) if lrid is not None else None,
+            "rowcount": int(result.get("affected_row_count", 0) or 0),
         }
     # Local sqlite
     conn = sqlite3.connect(str(DB_PATH))
@@ -77,10 +147,12 @@ def _fetchone(sql: str, params: tuple | list | None = None) -> dict | None:
 def _fetchall(sql: str, params: tuple | list | None = None) -> list[dict]:
     params = _params_tuple(params)
     if _is_turso():
-        client = _turso()
-        result = client.execute(sql, params)
-        cols = list(result.columns)
-        return [dict(zip(cols, row)) for row in result.rows]
+        result = _turso_request(sql, params)
+        cols = [c["name"] for c in result.get("cols", [])]
+        out: list[dict] = []
+        for raw_row in result.get("rows", []):
+            out.append({col: _from_hrana_cell(cell) for col, cell in zip(cols, raw_row)})
+        return out
     conn = sqlite3.connect(str(DB_PATH))
     try:
         conn.row_factory = sqlite3.Row

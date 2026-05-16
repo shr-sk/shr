@@ -6,5 +6,4 @@ google-genai>=0.3.0
 requests>=2.31
 bcrypt>=4.1
 razorpay>=1.4
-libsql-client>=0.3.1
 streamlit-cookies-controller>=0.0.4
