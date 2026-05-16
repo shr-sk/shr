@@ -1,0 +1,55 @@
+# Meta Traffic campaign targeted at 3 pin-drop epicenters in Bangalore.
+# Demonstrates the new `targeting.geo_locations.custom_locations` field.
+#
+# Run with:
+#   python launch.py inputs/example_traffic_proximity.yaml --adapter mock
+
+ad_account_id: "1234567890"
+
+campaign:
+  name: "Coworking Pilot — Meta Traffic"
+  objective: OUTCOME_TRAFFIC
+  special_ad_categories: ["NONE"]
+  spend_cap: 200000                # ₹2,000 hard ceiling
+
+ad_set:
+  name: "Bangalore Pin-Drops, Founders 25-44"
+  optimization_goal: LINK_CLICKS
+  daily_budget: 50000              # ₹500/day
+  destination_type: WEBSITE
+
+  targeting:
+    # No `countries` needed — custom_locations alone defines the geo target.
+    geo_locations:
+      custom_locations:
+        - { latitude: 12.934285, longitude: 77.669365, radius: 1.5 }   # HSR / Bellandur
+        - { latitude: 12.969266, longitude: 77.602530, radius: 1.5 }   # MG Road / Indiranagar
+        - { latitude: 13.069354, longitude: 77.565689, radius: 1.5 }   # Hebbal / Yelahanka
+      location_types: ["home", "recent"]
+
+    age_min: 25
+    age_max: 44
+    genders: []
+    flexible_spec:
+      - interests:
+          - { id: "6003020834693", name: "Coworking" }
+          - { id: "6003107902433", name: "Startup company" }
+    publisher_platforms: ["facebook", "instagram"]
+
+ad:
+  name: "Coworking — single image"
+  creative:
+    name: "Coworking creative v1"
+    object_story_spec:
+      page_id: "100000000000000"
+      instagram_actor_id: "17841400000000000"
+      link_data:
+        image_hash: "placeholderhashtobeuploadedinrealrun"
+        message: "Premium coworking, three locations across Bangalore. Hot desks, cabins, meeting rooms. Book a tour."
+        name: "Premium Coworking, Bangalore"
+        description: "HSR · Indiranagar · Hebbal"
+        link: "https://example.com/coworking"
+        call_to_action:
+          type: BOOK_TRAVEL
+          value_link: "https://example.com/coworking"
+    url_tags: "utm_source=facebook&utm_medium=cpc&utm_campaign=coworking_pilot"

@@ -1,0 +1,46 @@
+# Pilot validation YAML for Meta — uses your real sandbox ad account
+# + real Page ID + real uploaded image_hash.
+# Pilot-safe: OUTCOME_TRAFFIC objective, LINK_CLICKS goal (no Pixel needed).
+
+ad_account_id: "998848709363610"           # your sandbox ad account (digits only)
+
+campaign:
+  name: "Pilot Test — Meta Traffic"
+  objective: OUTCOME_TRAFFIC
+  special_ad_categories: ["NONE"]
+  buying_type: AUCTION
+  spend_cap: 500000                        # ₹5,000 — Meta's INR minimum
+
+ad_set:
+  name: "Pilot Ad Set — India 25-44"
+  optimization_goal: LINK_CLICKS
+  billing_event: IMPRESSIONS
+  bid_strategy: LOWEST_COST_WITHOUT_CAP
+  daily_budget: 10000                      # ₹100/day (paise)
+  destination_type: WEBSITE
+
+  targeting:
+    geo_locations:
+      countries: ["IN"]
+      location_types: ["home", "recent"]
+    age_min: 25
+    age_max: 44
+    genders: []                            # empty = all
+    locales: []
+    flexible_spec: []                      # no detailed targeting for first test
+    publisher_platforms: ["facebook", "instagram"]
+
+ad:
+  name: "Pilot Test Ad"
+  creative:
+    name: "Pilot Test Creative"
+    object_story_spec:
+      page_id: "1033691806503292"          # your Facebook Page ID
+      link_data:
+        image_hash: "d362e57df24b77e1d05b5dd8f07198c2"   # just uploaded to /adimages
+        message: "Pilot test — API integration validation. Not a real campaign."
+        name: "Pilot Test"
+        link: "https://example.com/pilot-test"
+        call_to_action:
+          type: LEARN_MORE
+          value_link: "https://example.com/pilot-test"

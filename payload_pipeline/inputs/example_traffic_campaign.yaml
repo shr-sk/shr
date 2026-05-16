@@ -1,0 +1,60 @@
+# Example: a paused Meta Traffic campaign for a book.
+# Run with:
+#   python ../launch.py inputs/example_traffic_campaign.yaml --adapter mock
+# (or, from the meta/ folder:  python launch.py inputs/example_traffic_campaign.yaml --adapter mock)
+
+ad_account_id: "1234567890"          # the digits part of your act_XXX
+
+campaign:
+  name: "Q4 Book Launch — Meta Traffic"
+  objective: OUTCOME_TRAFFIC          # does NOT need Pixel — safe pre-Step-2
+  special_ad_categories: ["NONE"]
+  buying_type: AUCTION
+  spend_cap: 100000                   # ₹1,000 hard ceiling (minor currency = paise)
+
+ad_set:
+  name: "India 25-44, Mystery Readers"
+  optimization_goal: LINK_CLICKS
+  billing_event: IMPRESSIONS
+  bid_strategy: LOWEST_COST_WITHOUT_CAP
+  daily_budget: 30000                 # ₹300/day in minor currency
+  destination_type: WEBSITE
+  # start_time: 2026-05-15T09:00:00+05:30
+  # end_time:   2026-06-30T23:59:00+05:30
+
+  targeting:
+    geo_locations:
+      countries: ["IN"]
+      location_types: ["home", "recent"]
+    age_min: 25
+    age_max: 44
+    genders: []                       # empty = all
+    locales: []                       # empty = no language restriction
+    flexible_spec:
+      - interests:
+          - { id: "6003020834693", name: "Mystery fiction" }
+          - { id: "6003107902433", name: "Crime fiction" }
+    publisher_platforms: ["facebook", "instagram"]
+    facebook_positions: ["feed", "story"]
+    instagram_positions: ["stream", "story", "reels"]
+
+  # dsa_payor: "Example Books Pvt Ltd"          # required if any EU placement
+  # dsa_beneficiary: "Example Books Pvt Ltd"
+
+ad:
+  name: "Midnight Detective — single image"
+  creative:
+    name: "Creative — Midnight Detective v1"
+    object_story_spec:
+      page_id: "100000000000000"      # your Facebook Page ID
+      instagram_actor_id: "17841400000000000"
+      link_data:
+        image_hash: "abc123def456ghi789jkl012mno345pq"  # upload via /adimages first
+        message: "Detective Maya Verma is back. The new mystery you can't put down — out now."
+        name: "Midnight Detective — Out Now"
+        description: "Hardcover, paperback, Kindle."
+        link: "https://example.com/books/midnight-detective"
+        call_to_action:
+          type: SHOP_NOW
+          value_link: "https://example.com/books/midnight-detective"
+    url_tags: "utm_source=facebook&utm_medium=cpc&utm_campaign=book_launch"
