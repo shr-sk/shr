@@ -7,8 +7,9 @@ textColor = "#1C1E21"
 font = "sans serif"
 
 [server]
-runOnSave = true
-headless = false
+# headless = true is required for Streamlit Cloud (no browser to open).
+# Locally Streamlit will still open a browser tab automatically.
+headless = true
 
 [browser]
 gatherUsageStats = false
