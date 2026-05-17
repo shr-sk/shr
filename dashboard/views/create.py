@@ -366,8 +366,26 @@ def _problems() -> list[str]:
 
 
 def _image_paths_by_aspect():
-    """Return uploaded image dicts grouped by aspect."""
-    out = {}
+    """Return uploaded image dicts grouped by aspect.
+
+    Streamlit Cloud's filesystem is ephemeral — files inside `uploads/` get
+    wiped on every redeploy/restart. We auto-purge any session-state entries
+    whose local files no longer exist, so the user gets a clear "re-upload"
+    state instead of a silent failure later in the pipeline.
+    """
+    out: dict[str, dict] = {}
+    dead_keys = [
+        k for k, v in ss.uploaded_files.items()
+        if not Path(v.get("local_path", "")).exists()
+    ]
+    if dead_keys:
+        for k in dead_keys:
+            del ss.uploaded_files[k]
+        st.warning(
+            f"⚠️ {len(dead_keys)} previously-uploaded file(s) are no longer on the "
+            f"server (Streamlit Cloud wipes uploads on every restart). Please "
+            f"re-upload them above and click Build YAML again."
+        )
     for entry in ss.uploaded_files.values():
         if entry["kind"] != "image":
             continue
@@ -517,7 +535,10 @@ if btn_build.button("Build YAML", type="primary", use_container_width=True):
                 "currency": ss.currency,
             }
         except Exception as e:
-            st.error(str(e))
+            import traceback
+            st.error(f"Build failed: {type(e).__name__}: {e}")
+            with st.expander("Full error trace (debugging)", expanded=True):
+                st.code(traceback.format_exc(), language="text")
 
 
 if btn_mock.button("Run mock", use_container_width=True, disabled=ss.rendered_yaml is None):
