@@ -149,6 +149,11 @@ def build_meta_yaml(
             "locales": locales,
             "flexible_spec": flexible_spec,
             "publisher_platforms": ["facebook", "instagram"],
+            # Required by Meta since 2024 — Advantage Audience off (0) keeps
+            # delivery strict to the geo/age/interests we set. For wider reach
+            # campaigns (national-scale brand), flip to 1 to let Meta's AI
+            # expand the audience automatically.
+            "targeting_automation": {"advantage_audience": 0},
         },
     }
     # Meta requires a `promoted_object` on the ad set for any optimization

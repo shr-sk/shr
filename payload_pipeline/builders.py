@@ -147,6 +147,8 @@ def build_ad_set(spec: MetaCampaignYaml) -> dict:
         "publisher_platforms": s.targeting.publisher_platforms,
         "facebook_positions": s.targeting.facebook_positions,
         "instagram_positions": s.targeting.instagram_positions,
+        # Required by Meta since 2024 — explicit Advantage Audience on/off.
+        "targeting_automation": s.targeting.targeting_automation.model_dump(),
     })
 
     payload: dict[str, Any] = {

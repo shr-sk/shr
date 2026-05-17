@@ -104,6 +104,20 @@ class FlexibleSpecBlock(BaseModel):
     behaviors: list[InterestEntry] = Field(default_factory=list)
 
 
+class TargetingAutomation(BaseModel):
+    """Meta requires this field on every ad set since 2024 — explicit
+    on/off for Advantage Audience (Meta's AI audience expansion).
+
+    `advantage_audience = 1` lets Meta expand beyond your specified targeting
+    if it predicts better results. `0` keeps delivery strict to what you set.
+
+    For Lead Form ads with tight geo (single-city), 0 is usually the right
+    pick — preserves the local-only delivery. For broad-reach campaigns,
+    1 tends to perform better.
+    """
+    advantage_audience: int = Field(default=0, ge=0, le=1)
+
+
 class TargetingInput(BaseModel):
     geo_locations: GeoLocations
     age_min: int = Field(default=18, ge=13, le=65)
@@ -115,6 +129,7 @@ class TargetingInput(BaseModel):
     publisher_platforms: list[Platform] = Field(default_factory=lambda: ["facebook", "instagram"])
     facebook_positions: list[str] | None = None
     instagram_positions: list[str] | None = None
+    targeting_automation: TargetingAutomation = Field(default_factory=TargetingAutomation)
 
     @model_validator(mode="after")
     def check_age(self):
