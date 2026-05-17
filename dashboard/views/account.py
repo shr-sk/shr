@@ -106,23 +106,20 @@ with box:
             except Exception as e:
                 st.error(f"Razorpay error: {e}")
     else:
-        # Manual fallback — show UPI / WhatsApp until Razorpay keys are in env
+        # Razorpay isn't configured yet — usually because merchant verification
+        # is still under review with Razorpay. Show a neutral message that
+        # signals our intent to integrate Razorpay (so Razorpay reviewers
+        # don't think we're routing around them).
         st.info(
-            "**Payment processing isn't live yet.** "
-            "Pay manually and we'll activate your subscription within 24 hours."
+            f"**Subscribe to Starter — {price['currency_symbol']}{price['amount']}/month**  \n"
+            "Online subscription billing via Razorpay is being activated. "
+            "Once our merchant verification is complete, you'll be able to "
+            "subscribe directly from this page."
         )
-        st.markdown(f"""
-        **Option 1 — UPI**
-        - UPI ID: `your-upi-id@bank` *(replace with yours)*
-        - Amount: {price['currency_symbol']}{price['amount']}
-
-        **Option 2 — WhatsApp**
-        - Send "Subscribe" to **{WHATSAPP_NUMBER}**
-        - Pay via the link we send back
-
-        After paying, send a screenshot to **{WHATSAPP_NUMBER}**. Your account
-        will be upgraded within 24 hours.
-        """)
+        st.markdown(
+            f"In the meantime, contact us on WhatsApp **{WHATSAPP_NUMBER}** "
+            "or email **sukumarpoddar90@gmail.com** to start your subscription."
+        )
 
 
 st.divider()
