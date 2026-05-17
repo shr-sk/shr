@@ -96,8 +96,11 @@ def build_meta_yaml(
     gender_label = {"male": "Male only", "female": "Female only"}.get(gender_pref, "Any")
     genders = GENDER_TO_META.get(gender_label, [])
 
+    # Meta rejects country + custom_locations as "overlapping" (custom circles
+    # are inside the country). Use ONE or the other:
+    #   • epicenters present → custom_locations only (precise circles)
+    #   • no epicenters       → country-wide
     geo_locations: dict[str, Any] = {
-        "countries": [country_iso],
         "location_types": ["home", "recent"],
     }
     if epicenters:
@@ -110,6 +113,8 @@ def build_meta_yaml(
             }
             for e in epicenters
         ]
+    else:
+        geo_locations["countries"] = [country_iso]
 
     # Interests can arrive in two shapes:
     #   list[str]   — raw names from the LLM, NOT resolved to Meta IDs
