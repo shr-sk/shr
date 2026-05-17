@@ -151,6 +151,12 @@ def build_meta_yaml(
             "publisher_platforms": ["facebook", "instagram"],
         },
     }
+    # Meta requires a `promoted_object` on the ad set for any optimization
+    # that needs a target context. For Lead Form (LEAD_GENERATION optimization)
+    # the promoted object is the Page that owns the leads.
+    # For Website + pixel-tracked conversion, it would be {pixel_id, custom_event_type}.
+    if is_lead_form:
+        ad_set_block["promoted_object"] = {"page_id": str(client["page_id"])}
     if start_date:
         ad_set_block["start_time"] = f"{start_date}T00:00:00+0000"
     if end_date:
