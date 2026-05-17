@@ -191,6 +191,20 @@ def build_meta_yaml(
     }
 
     if is_lead_form and lead_form_config:
-        yaml_dict["lead_form"] = lead_form_config
+        # Meta requires form names to be unique per Page. Earlier failed
+        # launches may have already created a form with the same name, so
+        # Meta returns "Form Name already exists" on retry. Auto-append a
+        # timestamp suffix so every build attempt produces a fresh name.
+        # (Strip any prior timestamp first so retries don't accumulate them.)
+        import re
+        from datetime import datetime
+        lf = dict(lead_form_config)
+        base = re.sub(
+            r"\s+\d{6}-\d{6}\s*$", "",
+            str(lf.get("name", "Lead form")),
+        ).strip()
+        stamp = datetime.now().strftime("%y%m%d-%H%M%S")
+        lf["name"] = f"{base} {stamp}"
+        yaml_dict["lead_form"] = lf
 
     return yaml_dict
