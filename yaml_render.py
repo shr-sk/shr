@@ -111,15 +111,21 @@ def build_meta_yaml(
             for e in epicenters
         ]
 
-    interests = ad_copy.get("interest_targeting") or []
+    # Interests can arrive in two shapes:
+    #   list[str]   — raw names from the LLM, NOT resolved to Meta IDs
+    #   list[dict]  — resolved via meta_utils.resolve_interest_ids
+    #                 each item has a real Meta interest ID + name
+    # Meta rejects placeholder/zero IDs (returns OAuthException 100 "Interests
+    # with ID 0 is invalid"), so when we don't have real IDs we drop interests
+    # entirely — Meta uses broad targeting which is fine for pilot.
+    raw_interests = ad_copy.get("interest_targeting") or []
+    resolved_interests = [
+        i for i in raw_interests
+        if isinstance(i, dict) and str(i.get("id", "")).strip() not in ("", "0", "0000000000000")
+    ]
     flexible_spec: list[dict] = []
-    if interests:
-        flexible_spec.append({
-            "interests": [
-                {"id": "0000000000000", "name": str(name)}
-                for name in interests[:5]
-            ],
-        })
+    if resolved_interests:
+        flexible_spec.append({"interests": resolved_interests[:5]})
 
     daily_budget_minor = to_minor(daily_budget, currency)
 
