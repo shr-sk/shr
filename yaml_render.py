@@ -86,6 +86,12 @@ def build_meta_yaml(
     country_iso = COUNTRY_TO_ISO.get(country, "US")
     locales = LANGUAGE_TO_LOCALES.get(language, [])
 
+    # Append a YYMMDD-HHMMSS suffix to every resource name so re-launches +
+    # failed-then-retried launches don't collide in Ads Manager — each one
+    # gets a distinguishable name.
+    from datetime import datetime
+    _stamp = datetime.now().strftime("%y%m%d-%H%M%S")
+
     is_lead_form = (destination or "Website").strip().lower().startswith("lead")
     link_target = landing_page_url or client.get("website_url") or "https://example.com"
     cta_type = cta_type or ad_copy.get("call_to_action") or ("GET_QUOTE" if is_lead_form else "LEARN_MORE")
@@ -135,7 +141,7 @@ def build_meta_yaml(
     daily_budget_minor = to_minor(daily_budget, currency)
 
     ad_set_block: dict[str, Any] = {
-        "name": f"{client['business_name']} — Default — Ad set",
+        "name": f"{client['business_name']} — Default — Ad set {_stamp}",
         "optimization_goal": "LEAD_GENERATION" if is_lead_form else "LINK_CLICKS",
         "billing_event": "IMPRESSIONS",
         "bid_strategy": bid_strategy,
@@ -172,7 +178,7 @@ def build_meta_yaml(
     yaml_dict: dict[str, Any] = {
         "ad_account_id": str(client["ad_account_id"]),
         "campaign": {
-            "name": f"{client['business_name']} — {('Leads' if is_lead_form else 'Traffic')}",
+            "name": f"{client['business_name']} — {('Leads' if is_lead_form else 'Traffic')} {_stamp}",
             "objective": final_objective,
             "status": launch_status,   # PAUSED (safe default) or ACTIVE (start immediately)
             "special_ad_categories": [special_ad_category],
@@ -181,9 +187,9 @@ def build_meta_yaml(
         },
         "ad_set": ad_set_block,
         "ad": {
-            "name": f"{client['business_name']} — single image",
+            "name": f"{client['business_name']} — single image {_stamp}",
             "creative": {
-                "name": f"{client['business_name']} creative",
+                "name": f"{client['business_name']} creative {_stamp}",
                 "object_story_spec": {
                     "page_id": str(client["page_id"]),
                     **(
