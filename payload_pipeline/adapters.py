@@ -207,24 +207,47 @@ class MetaAdapter:
         return data.get("id", "")  # may be empty in validate_only on some endpoints
 
     def _check_pilot_guard(self, operations: list[dict]) -> None:
+        # Explicit override — for pilots that DO have Pixel + CAPI verified.
         if os.environ.get("CONVERSION_TRACKING_VERIFIED", "").lower() == "true":
             return
+
+        # First, detect whether this whole launch is a Lead Form (Instant Form)
+        # campaign — destination_type=ON_AD on the ad_set means Meta tracks the
+        # lead conversion natively. Pixel + CAPI are NOT required for that case
+        # because the conversion event ('Lead') fires server-side inside Meta.
+        is_instant_form = any(
+            op["resource_type"] == "ad_set"
+            and op["payload"].get("destination_type") == "ON_AD"
+            for op in operations
+        )
+
         for op in operations:
             if op["resource_type"] == "campaign":
                 obj = op["payload"].get("objective")
+                # OUTCOME_LEADS is fine for Instant Form (native tracking) — only
+                # block it for Website / Messenger / off-Meta destinations.
+                if obj == "OUTCOME_LEADS" and is_instant_form:
+                    continue
                 if obj in _CONVERSION_OBJECTIVES:
                     raise RuntimeError(
                         f"Campaign objective '{obj}' requires Pixel + CAPI to be meaningful "
                         f"(smart delivery is blind without conversion data). For pilot, use "
-                        f"OUTCOME_TRAFFIC. To override, set CONVERSION_TRACKING_VERIFIED=true."
+                        f"OUTCOME_TRAFFIC, or switch destination to 'Lead Form' (Instant Form "
+                        f"tracks leads natively). To override, set "
+                        f"CONVERSION_TRACKING_VERIFIED=true."
                     )
             if op["resource_type"] == "ad_set":
                 goal = op["payload"].get("optimization_goal")
+                # LEAD_GENERATION is the correct goal for Instant Form ads — Meta
+                # tracks the in-app form submission directly.
+                if goal in ("LEAD_GENERATION", "QUALITY_LEAD") and is_instant_form:
+                    continue
                 if goal in _CONVERSION_OPT_GOALS:
                     raise RuntimeError(
                         f"Optimization goal '{goal}' requires Pixel + CAPI. "
-                        f"For pilot, use LINK_CLICKS or LANDING_PAGE_VIEWS. "
-                        f"To override, set CONVERSION_TRACKING_VERIFIED=true."
+                        f"For pilot, use LINK_CLICKS or LANDING_PAGE_VIEWS, or switch "
+                        f"to Lead Form destination. To override, set "
+                        f"CONVERSION_TRACKING_VERIFIED=true."
                     )
 
 
