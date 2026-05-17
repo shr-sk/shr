@@ -93,7 +93,9 @@ def build_campaign(spec: MetaCampaignYaml) -> dict:
     payload: dict[str, Any] = {
         "name": c.name,
         "objective": c.objective,
-        "status": "PAUSED",  # v1 hard rule
+        # Status driven by the YAML — default 'PAUSED' in the schema. The
+        # dashboard exposes a "Launch as PAUSED / ACTIVE" radio.
+        "status": c.status,
         "special_ad_categories": c.special_ad_categories,
         "buying_type": c.buying_type,
         # Required by newer Marketing API versions when CBO is not enabled.
@@ -150,7 +152,10 @@ def build_ad_set(spec: MetaCampaignYaml) -> dict:
     payload: dict[str, Any] = {
         "name": s.name,
         "campaign_id": CAMPAIGN_REF,
-        "status": "PAUSED",
+        # Ad set inherits the launch status set on the campaign (so the whole
+        # tree comes up together — no point launching the ad set ACTIVE if the
+        # campaign above it is PAUSED).
+        "status": spec.campaign.status,
         "optimization_goal": s.optimization_goal,
         "billing_event": s.billing_event,
         "bid_strategy": s.bid_strategy,
@@ -227,7 +232,8 @@ def build_ad(spec: MetaCampaignYaml) -> dict:
         "payload": {
             "name": a.name,
             "adset_id": AD_SET_REF,
-            "status": "PAUSED",
+            # Inherits the campaign-level status (PAUSED or ACTIVE).
+            "status": spec.campaign.status,
             "creative": creative_payload,
         },
     }

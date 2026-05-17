@@ -313,9 +313,31 @@ st.divider()
 
 
 # ============================================================================
-# Build
+# Build + Launch
 # ============================================================================
-btn_build, btn_mock = st.columns(2)
+
+ss.setdefault("confirm_active_launch", False)
+ss.setdefault("launch_result", "")
+ss.setdefault("launch_error", "")
+
+st.subheader("Build & launch")
+
+# Launch status — applies when the YAML is built AND when launching live.
+# PAUSED is the safe default; ACTIVE starts spending within ~30 min on Meta.
+launch_status = st.radio(
+    "Launch status",
+    ["PAUSED", "ACTIVE"],
+    index=0,
+    horizontal=True,
+    help=(
+        "PAUSED  — campaign is created but not delivering. You can review on Meta or "
+        "flip Resume in the Manage tab.  "
+        "ACTIVE — campaign starts spending immediately (within ~30 min)."
+    ),
+)
+ss["launch_status"] = launch_status
+
+btn_build, btn_mock, btn_live = st.columns(3)
 
 
 def _problems() -> list[str]:
@@ -465,6 +487,7 @@ if btn_build.button("Build YAML", type="primary", use_container_width=True):
                 image_hash_story=image_hash_story,
                 image_hash_portrait=image_hash_portrait,
                 bid_strategy=bidding,
+                launch_status=ss.get("launch_status", "PAUSED"),
             )
 
             ss.rendered_yaml = yaml_dict
@@ -498,6 +521,100 @@ if btn_mock.button("Run mock", use_container_width=True, disabled=ss.rendered_ya
         ss.mock_output = buf.getvalue()
     except Exception as e:
         st.error(str(e))
+
+
+# ---------- Launch to Meta (live) ----------
+# Disabled until: a YAML is built AND Demo mode is OFF AND no placeholder image hash.
+import os as _os  # local — only needed for the token check
+
+_live_disabled_reason = None
+if ss.rendered_yaml is None:
+    _live_disabled_reason = "Click **Build YAML** first."
+elif ss.get("demo_mode", True):
+    _live_disabled_reason = "Turn **Demo mode** OFF (sidebar) — live launch needs real image hashes."
+elif not _os.environ.get("META_ACCESS_TOKEN"):
+    _live_disabled_reason = "META_ACCESS_TOKEN not configured."
+else:
+    img_hash = (ss.rendered_yaml.get("ad", {}).get("creative", {})
+                .get("object_story_spec", {}).get("link_data", {})
+                .get("image_hash", ""))
+    if img_hash == "REPLACE_WITH_UPLOADED_HASH":
+        _live_disabled_reason = "Image hash is a placeholder — re-upload your image with Demo OFF."
+
+if btn_live.button(
+    "Launch to Meta",
+    use_container_width=True,
+    type="primary" if not _live_disabled_reason else "secondary",
+    disabled=bool(_live_disabled_reason),
+):
+    chosen = ss.get("launch_status", "PAUSED")
+    if chosen == "ACTIVE":
+        # ACTIVE means real spend begins. Require explicit confirmation.
+        ss.confirm_active_launch = True
+    else:
+        # PAUSED launches without confirmation — no money moves yet.
+        ss.launch_result = ""
+        ss.launch_error = ""
+        try:
+            from adapters import get_adapter
+            from builders import build_all
+            from validate import validate
+
+            spec = validate(ss.rendered_yaml)
+            operations = build_all(spec)
+            buf = StringIO()
+            with st.spinner("Sending to Meta…"):
+                adapter = get_adapter("meta", spec.ad_account_id)
+                adapter.run(operations, stream=buf, spec=spec)
+            ss.launch_result = buf.getvalue()
+        except Exception as e:
+            ss.launch_error = str(e)
+
+if _live_disabled_reason and ss.rendered_yaml is not None:
+    st.caption(f"_Launch button locked: {_live_disabled_reason}_")
+
+
+# Confirmation dialog when launching ACTIVE — real money guard
+if ss.confirm_active_launch:
+    with st.container(border=True):
+        st.warning(
+            f"**Launch as ACTIVE on `act_{ss.rendered_yaml.get('ad_account_id', '')}`?**  \n"
+            "Spending will begin within ~30 minutes. Daily budget = "
+            f"{ss.rendered_yaml.get('ad_set', {}).get('daily_budget', 0) / 100:.2f} "
+            f"(in minor units, divide by 100 for INR or USD)."
+        )
+        c1, c2 = st.columns(2)
+        if c1.button("Yes, launch ACTIVE", type="primary"):
+            ss.confirm_active_launch = False
+            ss.launch_result = ""
+            ss.launch_error = ""
+            try:
+                from adapters import get_adapter
+                from builders import build_all
+                from validate import validate
+
+                spec = validate(ss.rendered_yaml)
+                operations = build_all(spec)
+                buf = StringIO()
+                with st.spinner("Sending to Meta…"):
+                    adapter = get_adapter("meta", spec.ad_account_id)
+                    adapter.run(operations, stream=buf, spec=spec)
+                ss.launch_result = buf.getvalue()
+            except Exception as e:
+                ss.launch_error = str(e)
+            st.rerun()
+        if c2.button("Cancel"):
+            ss.confirm_active_launch = False
+            st.rerun()
+
+
+# Surface launch result / error
+if ss.get("launch_result"):
+    st.success("✅ Live launch complete.")
+    with st.expander("Launch output (real Meta API responses)", expanded=True):
+        st.code(ss.launch_result, language="text")
+if ss.get("launch_error"):
+    st.error(f"Launch failed: {ss.launch_error}")
 
 
 if ss.ad_copy:

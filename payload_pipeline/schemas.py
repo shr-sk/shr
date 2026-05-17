@@ -25,9 +25,15 @@ SpecialAdCategory = Literal[
 ]
 
 
+LaunchStatus = Literal["PAUSED", "ACTIVE"]
+
+
 class CampaignInput(BaseModel):
     name: str
     objective: Objective = "OUTCOME_TRAFFIC"
+    # Initial status — PAUSED is the safe default; ACTIVE starts spending immediately.
+    # Applies to campaign / ad_set / ad in this YAML render (we set them together).
+    status: LaunchStatus = "PAUSED"
     special_ad_categories: list[SpecialAdCategory] = Field(default_factory=lambda: ["NONE"])
     special_ad_category_country: list[str] | None = None
     buying_type: Literal["AUCTION", "RESERVATION"] = "AUCTION"

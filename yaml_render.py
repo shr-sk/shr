@@ -79,6 +79,7 @@ def build_meta_yaml(
     special_ad_category: str = "NONE",
     start_date: str | None = None,
     end_date: str | None = None,
+    launch_status: str = "PAUSED",
 ) -> dict:
     """Build the Meta YAML dict consumed by payload_pipeline/builders.build_all."""
     country = country or CURRENCY_TO_COUNTRY[currency]
@@ -151,6 +152,7 @@ def build_meta_yaml(
         "campaign": {
             "name": f"{client['business_name']} — {('Leads' if is_lead_form else 'Traffic')}",
             "objective": final_objective,
+            "status": launch_status,   # PAUSED (safe default) or ACTIVE (start immediately)
             "special_ad_categories": [special_ad_category],
             "buying_type": "AUCTION",
             "spend_cap": spend_cap,
