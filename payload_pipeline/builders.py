@@ -31,32 +31,37 @@ def _build_asset_feed_spec(ld, cta_value: dict) -> dict:
       • image_hash_story   (9:16, ~1080x1920) -> FB Stories + IG Stories + Reels
       • image_hash_portrait (4:5, ~1080x1350) -> IG Feed (better engagement)
 
+    Meta requires `image_label` to reference an image by NAME (or id), not by
+    hash. Each image gets a unique `name` field, and the rule's `image_label`
+    references that name. (Hash-based references return error 100
+    "Label's id or name has to be present in the spec".)
+
     Customization rules are evaluated by Meta in order; the FIRST matching
-    rule wins. So put more-specific (IG portrait) BEFORE the generic feed rule.
+    rule wins. Put more-specific (IG portrait) BEFORE the generic feed rule.
     """
-    images: list[dict] = [{"hash": ld.image_hash}]
+    images: list[dict] = [{"hash": ld.image_hash, "name": "feed"}]
     rules: list[dict] = []
 
     if ld.image_hash_story:
-        images.append({"hash": ld.image_hash_story})
+        images.append({"hash": ld.image_hash_story, "name": "story"})
         rules.append({
             "customization_spec": {
                 "publisher_platforms": ["facebook", "instagram"],
                 "facebook_positions": ["story"],
                 "instagram_positions": ["story", "reels"],
             },
-            "image_label": {"hash": ld.image_hash_story},
+            "image_label": {"name": "story"},
         })
 
     if ld.image_hash_portrait:
-        images.append({"hash": ld.image_hash_portrait})
+        images.append({"hash": ld.image_hash_portrait, "name": "portrait"})
         # IG Feed only — must come BEFORE the generic 1:1 rule
         rules.append({
             "customization_spec": {
                 "publisher_platforms": ["instagram"],
                 "instagram_positions": ["stream"],
             },
-            "image_label": {"hash": ld.image_hash_portrait},
+            "image_label": {"name": "portrait"},
         })
 
     # Generic 1:1 fallback rule (covers FB Feed + IG Feed when not overridden)
@@ -66,7 +71,7 @@ def _build_asset_feed_spec(ld, cta_value: dict) -> dict:
             "facebook_positions": ["feed"],
             "instagram_positions": ["stream"],
         },
-        "image_label": {"hash": ld.image_hash},
+        "image_label": {"name": "feed"},
     })
 
     spec_out: dict = {
