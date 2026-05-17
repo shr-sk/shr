@@ -468,22 +468,20 @@ if btn_build.button("Build YAML", type="primary", use_container_width=True):
             # Force the user-picked CTA to win over the LLM suggestion
             ss.ad_copy["call_to_action"] = cta_type
 
-            # Resolve Gemini's interest *names* to real Meta interest *IDs*.
-            # Meta rejects placeholder IDs ("Interests with ID 0 is invalid"),
-            # so if we can't resolve, we drop interests entirely — Meta then
-            # uses broad targeting on geo + age + Lead Form context.
-            try:
-                from meta_utils import resolve_interest_ids  # type: ignore[import-not-found]
-                names = ss.ad_copy.get("interest_targeting") or []
-                resolved = resolve_interest_ids(names) if not ss.get("demo_mode", True) else []
-                if resolved:
-                    ss.ad_copy["interest_targeting"] = resolved
-                else:
-                    # Either demo mode, or none of the names matched Meta's catalog.
-                    # Drop the list so yaml_render skips flexible_spec entirely.
-                    ss.ad_copy["interest_targeting"] = []
-            except Exception:
-                ss.ad_copy["interest_targeting"] = []
+            # Interest targeting disabled by default — Meta's /search?type=adinterest
+            # ranks by global audience size, which routinely returns wrong-country
+            # matches (e.g. "Income tax" → "Australian Taxation Office") AND
+            # surfaces deprecated interests that Meta then rejects at ad creation.
+            #
+            # For Lead Form ads with tight geo + age, broad targeting (no interests)
+            # delivers as well or better. We keep the LLM-generated names in
+            # ss.ad_copy for display only, then clear the field before YAML build
+            # so flexible_spec is empty.
+            #
+            # TODO (post-pilot): rebuild interest resolution with country-biased
+            # search + validation against Meta's /targetingvalidation endpoint
+            # to filter deprecated IDs before they hit ad-creation.
+            ss.ad_copy["interest_targeting"] = []
 
             # Upload each uploaded image to Meta /adimages to get its image_hash.
             # In Demo mode we use upload_mock (MD5 of file bytes — deterministic,
