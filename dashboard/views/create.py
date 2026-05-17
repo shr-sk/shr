@@ -84,9 +84,21 @@ ss.setdefault("pixel_modal_acknowledged", False)
 ss.setdefault("prev_destination", None)
 
 
+def _safe_label(label: str) -> str:
+    """Filesystem-safe slug. Slot labels like "Stories / Reels" or
+    "Feed (square)" contain `/`, `(`, `)`, spaces — strip everything except
+    alphanumerics, collapse to underscore, trim trailing separators."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "slot"
+
+
 def _save_upload(uploaded_file, label: str) -> str:
+    # `label` here may still contain unsafe characters from the slot name;
+    # always re-sanitise before using it as a filename component.
+    safe = _safe_label(label)
     suffix = Path(uploaded_file.name).suffix
-    target = UPLOADS_DIR / f"{label}_{uuid.uuid4().hex[:8]}{suffix}"
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    target = UPLOADS_DIR / f"{safe}_{uuid.uuid4().hex[:8]}{suffix}"
     with open(target, "wb") as f:
         f.write(uploaded_file.getvalue())
     return str(target)
@@ -243,9 +255,10 @@ for i, (label, required, size, aspect, notes) in enumerate(MEDIA_SPEC_BASE):
             label, type=ftypes, key=f"upload-{label}", label_visibility="collapsed",
         )
         if uploaded:
-            path = _save_upload(uploaded, label.lower().replace(" ", "_"))
+            slug = _safe_label(label)
+            path = _save_upload(uploaded, slug)
             ss.uploaded_files[label] = {
-                "label": label.lower().replace(" ", "_"),
+                "label": slug,
                 "local_path": path,
                 "aspect": aspect,
                 "kind": "video" if "Video" in label else "image",
