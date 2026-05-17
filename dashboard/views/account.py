@@ -1,4 +1,4 @@
-"""Account view — current plan, billing, upgrade, logout."""
+"""Account view — current plan, billing, Razorpay subscribe, logout."""
 from __future__ import annotations
 
 import sys
@@ -28,8 +28,25 @@ if not me:
 user_row = db.find_user(me["id"])
 sub = db.get_subscription(me["id"]) or {}
 
+# Razorpay redirects back to the app after checkout. Streamlit Cloud strips
+# query params on the next rerun, so we read once + show a confirmation.
+qp = st.query_params
+just_paid = qp.get("razorpay_success") == "1"
+if just_paid:
+    # Force a fresh poll so the success banner reflects reality.
+    try:
+        sub = subscription.poll_and_update(me["id"]) or sub
+    except Exception:
+        pass
+
 
 st.title("Account")
+
+if just_paid:
+    st.success(
+        "🎉 **Payment confirmed.** Your subscription is now active — "
+        "thanks for upgrading."
+    )
 
 # ---------- Profile summary ----------
 c1, c2 = st.columns(2)
@@ -56,7 +73,7 @@ if status == "trialing":
     days_left = (trial_end - now).days if trial_end else 0
     hours_left = max(0, int((trial_end - now).total_seconds() / 3600)) if trial_end else 0
     if hours_left < 24:
-        st.warning(f"⏰ **Trial ends in {hours_left} hours.** Upgrade to keep your campaigns running.")
+        st.warning(f"⏰ **Trial ends in {hours_left} hours.** Subscribe below to keep your campaigns running.")
     else:
         st.info(f"Free trial · {days_left} day(s) remaining")
 elif status == "active":
@@ -66,61 +83,127 @@ elif status == "active":
 elif status == "past_due":
     st.error("⚠️ Payment failed. Update your payment method to keep your campaigns running.")
 elif status == "expired":
-    st.error("Subscription expired. Renew below to resume your campaigns.")
+    st.error("Subscription expired. Subscribe below to resume your campaigns.")
 elif status == "canceled":
-    st.warning("Subscription canceled. Renew below to resume.")
+    st.warning("Subscription canceled. Subscribe below to resume.")
 
 st.divider()
 
 
 # ---------- Upgrade flow ----------
-st.subheader("Upgrade" if status != "active" else "Manage plan")
-
 price = PRICING[me["currency"]]
 plan_id = subscription.plan_id_for(me["currency"])
+is_active = status == "active"
 
-box = st.container(border=True)
-with box:
-    st.markdown(f"### Starter — {price['currency_symbol']}{price['amount']}/month")
-    st.caption("1 client account · Meta + Instagram · Insights · Pause/Resume")
+st.subheader("Manage plan" if is_active else "Upgrade your plan")
 
-    if subscription.razorpay_configured() and plan_id:
-        # Real Razorpay flow
-        if st.button("Pay with Razorpay", type="primary", use_container_width=True):
+# Plan card — gradient header + feature list + primary CTA
+plan_card = st.container(border=True)
+with plan_card:
+    st.markdown(
+        f"""
+        <div style="
+            background: linear-gradient(135deg, #1877F2 0%, #4267B2 100%);
+            color: white;
+            padding: 18px 22px;
+            border-radius: 8px;
+            margin-bottom: 14px;
+        ">
+            <div style="font-size: 13px; opacity: 0.85; letter-spacing: 0.3px;">STARTER</div>
+            <div style="font-size: 30px; font-weight: 700; line-height: 1.1; margin-top: 2px;">
+                {price['currency_symbol']}{price['amount']}
+                <span style="font-size: 14px; font-weight: 400; opacity: 0.85;">/ month</span>
+            </div>
+            <div style="font-size: 13px; opacity: 0.85; margin-top: 6px;">
+                Billed monthly · cancel anytime
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        st.markdown(
+            "- ✅ 1 client Meta ad account\n"
+            "- ✅ Facebook + Instagram placements\n"
+            "- ✅ AI ad copy (Gemini)\n"
+            "- ✅ Auto-pause / auto-resume"
+        )
+    with fc2:
+        st.markdown(
+            "- ✅ Live KPI dashboard\n"
+            "- ✅ One-click campaign launch\n"
+            "- ✅ Instant Form lead ads\n"
+            "- ✅ Email + WhatsApp support"
+        )
+    st.markdown("")  # spacer
+
+    if not (subscription.razorpay_configured() and plan_id):
+        st.error(
+            "Subscription billing is temporarily unavailable. "
+            f"Please email **sukumarpoddar90@gmail.com** to subscribe."
+        )
+    elif is_active:
+        st.caption(
+            "You're on Starter. To change card, cancel, or manage invoices, "
+            "use the Razorpay link in your last billing email — or message "
+            f"**WhatsApp {WHATSAPP_NUMBER}**."
+        )
+    else:
+        cta_label = (
+            f"Subscribe — {price['currency_symbol']}{price['amount']}/month"
+            if status in ("expired", "canceled", "past_due")
+            else f"Continue to Razorpay · {price['currency_symbol']}{price['amount']}/month"
+        )
+        if st.button(cta_label, type="primary", use_container_width=True, key="rzp_subscribe"):
             try:
-                with st.spinner("Creating subscription…"):
+                with st.spinner("Setting up your subscription…"):
                     result = subscription.create_subscription(
                         user={"id": me["id"], "email": me["email"], "tier": me["tier"]},
                         plan_id=plan_id,
                     )
                 checkout_url = result.get("short_url")
                 if checkout_url:
-                    st.success("Redirecting to Razorpay…")
-                    st.markdown(
-                        f'<meta http-equiv="refresh" content="0; url={checkout_url}">',
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(f"[Click here if not redirected]({checkout_url})")
+                    # Stash the URL — Streamlit re-renders after the click,
+                    # we want the redirect HTML to survive.
+                    st.session_state["_rzp_checkout_url"] = checkout_url
+                    st.rerun()
                 else:
-                    st.error("Could not generate checkout link.")
+                    st.error("Could not generate a Razorpay checkout link. Please retry.")
             except Exception as e:
                 st.error(f"Razorpay error: {e}")
-    else:
-        # Razorpay isn't configured yet — usually because merchant verification
-        # is still under review with Razorpay. Show a neutral message that
-        # signals our intent to integrate Razorpay (so Razorpay reviewers
-        # don't think we're routing around them).
-        st.info(
-            f"**Subscribe to Starter — {price['currency_symbol']}{price['amount']}/month**  \n"
-            "Online subscription billing via Razorpay is being activated. "
-            "Once our merchant verification is complete, you'll be able to "
-            "subscribe directly from this page."
-        )
-        st.markdown(
-            f"In the meantime, contact us on WhatsApp **{WHATSAPP_NUMBER}** "
-            "or email **sukumarpoddar90@gmail.com** to start your subscription."
+
+        # Surface the redirect target after rerun
+        checkout_url = st.session_state.pop("_rzp_checkout_url", None)
+        if checkout_url:
+            st.success("Opening secure Razorpay checkout…")
+            st.markdown(
+                f'<meta http-equiv="refresh" content="0; url={checkout_url}">',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<a href="{checkout_url}" target="_self" '
+                'style="display:inline-block;padding:10px 18px;background:#1877F2;'
+                'color:white;border-radius:6px;text-decoration:none;font-weight:600;">'
+                "Click here if not redirected →</a>",
+                unsafe_allow_html=True,
+            )
+
+        st.caption(
+            "🔒 Payments are processed securely by Razorpay. "
+            "Card details never touch our servers."
         )
 
+        st.markdown("")
+        rc1, rc2 = st.columns([2, 1])
+        rc1.caption("Already completed payment? Sync your subscription status from Razorpay.")
+        if rc2.button("Refresh status", use_container_width=True, key="rzp_refresh"):
+            try:
+                with st.spinner("Checking Razorpay…"):
+                    subscription.poll_and_update(me["id"])
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not refresh: {e}")
 
 st.divider()
 

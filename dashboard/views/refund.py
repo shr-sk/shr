@@ -47,11 +47,13 @@ subscription will not renew the following month.
 
 You can cancel your subscription at any time. Two ways:
 
-1. **In-app**: Go to the **Account** tab → in the future, a "Cancel
-   subscription" button will be available there. Until then, use option 2.
-2. **WhatsApp or email**: message us on **+91 9102916841** or email
+1. **Via Razorpay**: open your most recent Razorpay billing email and click
+   *Manage subscription* → *Cancel*. The cancellation is immediate;
+   no further charges will be made.
+2. **Email or WhatsApp**: message us on **+91 9102916841** or email
    **sukumarpoddar90@gmail.com** with the subject line *"Cancel
-   subscription"* and your registered email.
+   subscription"* and your registered email — we'll cancel it for you
+   within one business day.
 
 After cancellation:
 

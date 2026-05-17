@@ -10,7 +10,6 @@ sys.path.insert(0, str(ROOT))
 import streamlit as st
 
 from auth import auth as auth_mod
-from auth import db
 from auth.subscription import PRICING, WHATSAPP_NUMBER
 
 
@@ -48,15 +47,15 @@ with login_tab:
 
 
 with signup_tab:
-    st.markdown("**2-day free trial.** No card required.")
+    st.markdown("**2-day free trial.** No card required to start.")
     cols = st.columns(2)
     inr_box = cols[0].container(border=True)
     usd_box = cols[1].container(border=True)
     inr_box.markdown(f"### {PRICING['INR']['currency_symbol']}{PRICING['INR']['amount']}/mo")
-    inr_box.caption("India · UPI / cards / NetBanking")
+    inr_box.caption("India · UPI / cards / NetBanking via Razorpay")
     inr_box.caption("Starter: 1 client account · Meta + Insights")
     usd_box.markdown(f"### {PRICING['USD']['currency_symbol']}{PRICING['USD']['amount']}/mo")
-    usd_box.caption("International · cards")
+    usd_box.caption("International · cards via Razorpay")
     usd_box.caption("Starter: 1 client account · Meta + Insights")
     st.caption(
         f"Need 5+ clients? Agency plans start at ₹3,499/mo · "

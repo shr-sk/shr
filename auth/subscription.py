@@ -1,12 +1,9 @@
-"""Subscription provider abstraction — Razorpay primary, manual fallback.
+"""Razorpay subscription helpers.
 
-When `RAZORPAY_KEY_ID` is not set in env (early pilot), the system falls back
-to a manual-payment flow: user clicks Upgrade → sees UPI / bank details
-and a WhatsApp link → admin manually marks them paid in /admin → subscription
-extends 30 days.
-
-When `RAZORPAY_KEY_ID` IS set, the same Upgrade button creates a Razorpay
-Subscription and redirects to hosted Razorpay Checkout.
+The Upgrade button on the Account tab creates a Razorpay Subscription and
+redirects the user to hosted Razorpay Checkout. Status sync (poll_and_update)
+happens lazily on every gated page load so the DB reflects reality without
+needing a webhook.
 """
 from __future__ import annotations
 
@@ -28,7 +25,7 @@ PRICING = {
 
 
 WHATSAPP_NUMBER = "+91 9102916841"
-SUPPORT_EMAIL = "support@your-domain.com"   # update once you have one
+SUPPORT_EMAIL = "sukumarpoddar90@gmail.com"
 
 
 # ---------- Provider detection ----------

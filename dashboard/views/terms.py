@@ -38,12 +38,15 @@ activity that happens under your account.
 - The Service offers a **2-day free trial** on signup. No payment method
   is required during the trial.
 - After the trial, continued access requires a paid subscription. The
-  Starter plan is **₹999 per month** (Indian Rupees) for users in India,
-  billed monthly via Razorpay. International pricing may be offered
-  separately when available.
+  Starter plan is **₹999 per month** for users in India, billed monthly
+  via Razorpay. International pricing (where supported) is **$21 per
+  month** billed via Razorpay International.
 - Subscriptions renew automatically each month unless cancelled. By
   subscribing, you authorise Razorpay to charge your registered payment
   method on the renewal date.
+- All payments are processed by Razorpay. We do not see, store, or have
+  access to your card details — Razorpay's PCI-DSS compliant systems
+  handle all card data.
 
 ## 5. Your responsibilities
 

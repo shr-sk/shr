@@ -22,11 +22,11 @@ application.
 |---|---|
 | You sign up for a free trial | **Immediately** on email + password submission |
 | You complete a subscription payment via Razorpay | **Within 2 minutes** of Razorpay's payment confirmation |
-| You upgrade your tier from the Admin team | **Immediately** after we update your account record |
+| You upgrade to an Agency tier via WhatsApp invoice | **Within 24 hours** of payment confirmation |
 
 If you do not see your subscription active within 10 minutes of a
-successful payment, refresh the page and check your **Account** tab.
-If still not active, contact us — see Section 6.
+successful Razorpay payment, click **Refresh status** on the **Account**
+tab. If still not active, contact us — see Section 6.
 
 ## 3. What "delivery" includes
 
