@@ -36,10 +36,21 @@ if me is None and not st.session_state.get("_cookie_warmup_done"):
 
 THIS_DIR = Path(__file__).parent
 
+# Public policy pages — visible in nav regardless of auth state so payment
+# processors (Razorpay) and other reviewers can navigate to them without
+# needing to sign up.
+policy_pages = [
+    st.Page(str(THIS_DIR / "views" / "terms.py"),   title="Terms",    icon="📄"),
+    st.Page(str(THIS_DIR / "views" / "privacy.py"), title="Privacy",  icon="🔒"),
+    st.Page(str(THIS_DIR / "views" / "refund.py"),  title="Refund",   icon="💸"),
+    st.Page(str(THIS_DIR / "views" / "service.py"), title="Service",  icon="📦"),
+]
+
 if me is None:
-    # Not authed — only show the login page
+    # Not authed — show login + policy pages
     pages = [
         st.Page(str(THIS_DIR / "views" / "login.py"), title="Sign in", icon="🔐", default=True),
+        *policy_pages,
     ]
 else:
     pages = [
@@ -48,6 +59,7 @@ else:
         st.Page(str(THIS_DIR / "views" / "preview.py"),   title="Preview",   icon="👁️"),
         st.Page(str(THIS_DIR / "views" / "manage.py"),    title="Manage",    icon="🎛️"),
         st.Page(str(THIS_DIR / "views" / "account.py"),   title="Account",   icon="⚙️"),
+        *policy_pages,
     ]
     # Admin tab — visible ONLY to users flagged is_admin = 1 in the DB.
     # ADMIN_PASSWORD acts as a backup gate inside admin.py for emergency access
