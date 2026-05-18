@@ -15,18 +15,24 @@ from pydantic import BaseModel, Field
 # ---------- Location schema ----------
 
 class CityPick(BaseModel):
-    name: str = Field(description="City + state/region, e.g. 'Bangalore, Karnataka'.")
+    name: str = Field(
+        description=(
+            "For wide scopes: 'Bangalore, Karnataka'. "
+            "For hyper-local scope: '<Neighborhood> — <City>', e.g. 'Indiranagar — Bangalore'."
+        ),
+    )
     lat: float = Field(description="Latitude in decimal degrees.")
     lng: float = Field(description="Longitude in decimal degrees.")
     radius_km: float = Field(
         ge=1, le=80,
-        description="Targeting radius around the city centre in KILOMETRES.",
+        description="Targeting radius in KILOMETRES. Meta minimum is 1 km.",
     )
     why: str = Field(description="One-sentence rationale.")
 
 
 class LocationGuess(BaseModel):
-    cities: list[CityPick] = Field(min_length=1, max_length=10)
+    # Up to 30 to accommodate hyper-local (3 clusters × up to 10 input cities).
+    cities: list[CityPick] = Field(min_length=1, max_length=30)
     negative_areas: list[str] = Field(default_factory=list)
 
 
@@ -88,9 +94,9 @@ def _model() -> str:
 
 # ---------- Public API ----------
 
-_RESOLVE_PROMPT = """You are resolving target cities for a Meta (Facebook + Instagram) ad campaign.
+_RESOLVE_PROMPT = """You are resolving target locations for a Meta (Facebook + Instagram) ad campaign.
 
-The user has chosen these cities to target:
+The user has entered these cities to target:
 {cities}
 
 Business context:
@@ -99,16 +105,50 @@ Business context:
   Country:       {country}
   Reach scope:   {reach_scope}
 
-For each city return:
-  • City + state/region label (e.g. "Bangalore, Karnataka")
-  • Accurate city-centre latitude and longitude
-  • A radius in KILOMETRES sensible for the business + scope:
-      - "local"     → 3–10 km   (single-location service, dentist, salon)
-      - "city-wide" → 10–25 km  (mid-size service or retail)
-      - "metro"     → 25–60 km  (regional brand)
-  • One short reason
+------------------------------------------------------------------
+SCOPE RULES — follow EXACTLY. Wider scopes burn money on irrelevant
+audience; narrower scopes deliver tightly relevant impressions.
+------------------------------------------------------------------
 
-Handle ambiguous names by picking the largest metro and noting it in the reason.
+If reach scope is "hyper-local":
+  → For EACH input city, return EXACTLY 3 distinct sub-clusters
+    centered on specific neighborhoods/localities/business districts
+    that are most likely to contain this business's actual customers.
+  → Each cluster: 1.0–2.0 km radius. Pick the smallest radius that
+    plausibly covers that locality. Default to 1.5 km if unsure.
+  → The `name` field MUST follow this format:
+        "<Neighborhood> — <City>"
+    (use the em-dash). Examples:
+        "Indiranagar — Bangalore"
+        "Koramangala — Bangalore"
+        "HSR Layout — Bangalore"
+  → Choose neighborhoods based on the business context. Examples:
+      • CA / tax / legal firm → high-income residential + business districts
+      • Restaurant / cafe     → dense residential + office cluster nearby
+      • Dental / clinic       → affluent residential within driving distance
+      • Coworking / B2B SaaS  → tech hubs, IT parks, business districts
+  → The `why` field must NAME the neighborhood and explain in one
+    sentence why it fits this business.
+
+If reach scope is "local":
+  → ONE pick per input city. Radius 3–10 km. Single-location service.
+
+If reach scope is "city-wide":
+  → ONE pick per input city. Radius 10–25 km. Mid-size service / retail.
+
+If reach scope is "metro":
+  → ONE pick per input city. Radius 25–60 km. Regional brand.
+
+------------------------------------------------------------------
+For every pick, return:
+  • Accurate latitude and longitude of the cluster centre
+    (for hyper-local: the centroid of the neighborhood, NOT the city).
+  • The radius in KILOMETRES from the rules above.
+  • The `name` field formatted per the scope rules.
+  • One short reason in `why`.
+
+Handle ambiguous city names by picking the largest metro and noting
+it in the reason.
 """
 
 
@@ -118,7 +158,7 @@ def resolve_cities(
     business_name: str = "",
     business_description: str = "",
     country: str = "India",
-    reach_scope: str = "city-wide",
+    reach_scope: str = "hyper-local",
 ) -> LocationGuess:
     """Resolve user-entered city names into lat/lng/radius_km for Meta targeting."""
     from google.genai import types  # type: ignore[import-not-found]

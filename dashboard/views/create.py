@@ -279,12 +279,22 @@ st.divider()
 # ============================================================================
 section_label("Targeting")
 cities_text = st.text_input("Target cities — comma separated", value=scenario["city"])
+
+_SCOPE_OPTIONS = ["hyper-local", "local", "city-wide", "metro"]
+_SCOPE_DESC = {
+    "hyper-local": "3 neighborhoods per city · ~1.5 km each · tightest, lowest waste",
+    "local":       "1 circle per city · 3–10 km · single-location service",
+    "city-wide":   "1 circle per city · 10–25 km · mid-size service or retail",
+    "metro":       "1 circle per city · 25–60 km · regional brand",
+}
 reach_scope = st.radio(
     "Scope per city",
-    ["local", "city-wide", "metro"],
-    index=1,
+    _SCOPE_OPTIONS,
+    index=0,
     horizontal=True,
+    format_func=lambda s: s.replace("-", " ").title(),
 )
+st.caption(_SCOPE_DESC[reach_scope])
 st.divider()
 
 
@@ -690,8 +700,28 @@ if ss.image_hash_cache:
         st.dataframe(rows, use_container_width=True, hide_index=True)
 
 if ss.epicenters:
-    with st.expander("Resolved cities", expanded=False):
-        st.dataframe(ss.epicenters, use_container_width=True, hide_index=True)
+    n = len(ss.epicenters)
+    total_km2 = sum(3.14159 * (e["radius_km"] ** 2) for e in ss.epicenters)
+    with st.expander(
+        f"Resolved targeting — {n} cluster{'s' if n != 1 else ''} · "
+        f"~{total_km2:,.0f} km² total coverage",
+        expanded=True,
+    ):
+        # Pretty per-cluster cards rather than a raw dataframe — the "why"
+        # field is the bit that helps users sanity-check before launch.
+        for e in ss.epicenters:
+            st.markdown(
+                f"<div style='border-left:3px solid #1877F2;padding:8px 12px;"
+                f"margin:6px 0;background:#F4F6F8;border-radius:0 8px 8px 0;'>"
+                f"<div style='font-weight:600;color:#1C1E21;'>{e['name']}</div>"
+                f"<div style='color:#54595F;font-size:13px;margin-top:2px;'>"
+                f"<code style='font-size:12px;'>{e['lat']:.4f}, {e['lng']:.4f}</code> · "
+                f"radius {e['radius_km']:.1f} km</div>"
+                f"<div style='color:#54595F;font-size:13px;margin-top:4px;font-style:italic;'>"
+                f"{e.get('why', '')}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
 if ss.rendered_yaml:
     with st.expander("YAML preview", expanded=False):
