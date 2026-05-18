@@ -31,7 +31,10 @@ from presets import (
     presets_for,
     scenario_for,
 )
+from styles import hero, inject_css, section_label
 from yaml_render import build_meta_yaml
+
+inject_css()
 
 _load_env_once()
 
@@ -119,13 +122,17 @@ scenario = scenario_for(ss.currency)
 presets = presets_for(ss.currency)
 
 
-st.title("Create campaign")
+hero(
+    "Create campaign",
+    kicker="Step 1 of 3",
+    subtitle="Configure destination, audience, and creatives. Build, preview, then launch when ready.",
+)
 
 
 # ============================================================================
 # A. Destination + Client
 # ============================================================================
-st.subheader("Destination & Client")
+section_label("Destination & client")
 
 c1, c2 = st.columns([1, 2])
 with c1:
@@ -168,7 +175,7 @@ business_description = st.text_area(
 # ============================================================================
 if destination == "Website" and (just_switched_to_website or not ss.pixel_modal_acknowledged):
     with st.container(border=True):
-        st.markdown(f"### {sym}  Install Meta Pixel for conversion tracking")
+        st.markdown("### Install Meta Pixel for conversion tracking")
         st.markdown(
             "**Without Pixel**, you'll see clicks, CTR, and CPC — "
             "**but not CAC, ROAS, or conversion rate.** "
@@ -208,7 +215,7 @@ if destination == "Website" and (just_switched_to_website or not ss.pixel_modal_
 # Banner if user skipped Pixel install
 if destination == "Website" and not ss.pixel_id:
     st.warning(
-        "⚠️ **Pixel not installed.** Only reach metrics (CTR / CPC / impressions) will be tracked. "
+        "**Pixel not installed.** Only reach metrics (CTR / CPC / impressions) will be tracked. "
         "CAC and ROAS will be unavailable until Pixel + Purchase event are live."
     )
 
@@ -219,7 +226,7 @@ st.divider()
 # ============================================================================
 # B. Account IDs
 # ============================================================================
-st.subheader("Account")
+section_label("Account")
 c1, c2, c3 = st.columns(3)
 ad_account_id = c1.text_input("Ad Account ID", value=scenario["ad_account_id"])
 page_id = c2.text_input("Facebook Page ID", value=scenario["page_id"])
@@ -231,7 +238,7 @@ st.divider()
 # ============================================================================
 # C. Product
 # ============================================================================
-st.subheader("Product")
+section_label("Product")
 product_description = st.text_area(
     "What this campaign promotes",
     value=scenario["product_description"],
@@ -243,7 +250,7 @@ st.divider()
 # ============================================================================
 # D. Media
 # ============================================================================
-st.subheader("Media")
+section_label("Media")
 media_cols = st.columns(min(len(MEDIA_SPEC_BASE), 3))
 for i, (label, required, size, aspect, notes) in enumerate(MEDIA_SPEC_BASE):
     col = media_cols[i % len(media_cols)]
@@ -263,14 +270,14 @@ for i, (label, required, size, aspect, notes) in enumerate(MEDIA_SPEC_BASE):
                 "aspect": aspect,
                 "kind": "video" if "Video" in label else "image",
             }
-            st.caption("✓ saved")
+            st.caption("Saved")
 st.divider()
 
 
 # ============================================================================
 # E. Targeting
 # ============================================================================
-st.subheader("Targeting")
+section_label("Targeting")
 cities_text = st.text_input("Target cities — comma separated", value=scenario["city"])
 reach_scope = st.radio(
     "Scope per city",
@@ -284,7 +291,7 @@ st.divider()
 # ============================================================================
 # F. Budget
 # ============================================================================
-st.subheader("Budget")
+section_label("Budget")
 c1, c2, c3 = st.columns(3)
 daily_budget = c1.number_input(
     f"Daily {sym}", min_value=1.0, value=scenario["daily_budget"], step=5.0 if ss.currency == "USD" else 50.0,
@@ -333,7 +340,7 @@ ss.setdefault("confirm_active_launch", False)
 ss.setdefault("launch_result", "")
 ss.setdefault("launch_error", "")
 
-st.subheader("Build & launch")
+section_label("Build & launch")
 
 # Launch status — applies when the YAML is built AND when launching live.
 # PAUSED is the safe default; ACTIVE starts spending within ~30 min on Meta.
@@ -382,7 +389,7 @@ def _image_paths_by_aspect():
         for k in dead_keys:
             del ss.uploaded_files[k]
         st.warning(
-            f"⚠️ {len(dead_keys)} previously-uploaded file(s) are no longer on the "
+            f"{len(dead_keys)} previously-uploaded file(s) are no longer on the "
             f"server (Streamlit Cloud wipes uploads on every restart). Please "
             f"re-upload them above and click Build YAML again."
         )
@@ -659,7 +666,7 @@ if ss.confirm_active_launch:
 
 # Surface launch result / error
 if ss.get("launch_result"):
-    st.success("✅ Live launch complete.")
+    st.success("Live launch complete.")
     with st.expander("Launch output (real Meta API responses)", expanded=True):
         st.code(ss.launch_result, language="text")
 if ss.get("launch_error"):

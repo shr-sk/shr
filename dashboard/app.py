@@ -17,7 +17,6 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Meta Ads Launcher",
-    page_icon="📣",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -40,32 +39,32 @@ THIS_DIR = Path(__file__).parent
 # processors (Razorpay) and other reviewers can navigate to them without
 # needing to sign up.
 policy_pages = [
-    st.Page(str(THIS_DIR / "views" / "terms.py"),   title="Terms",    icon="📄"),
-    st.Page(str(THIS_DIR / "views" / "privacy.py"), title="Privacy",  icon="🔒"),
-    st.Page(str(THIS_DIR / "views" / "refund.py"),  title="Refund",   icon="💸"),
-    st.Page(str(THIS_DIR / "views" / "service.py"), title="Service",  icon="📦"),
+    st.Page(str(THIS_DIR / "views" / "terms.py"),   title="Terms"),
+    st.Page(str(THIS_DIR / "views" / "privacy.py"), title="Privacy"),
+    st.Page(str(THIS_DIR / "views" / "refund.py"),  title="Refund"),
+    st.Page(str(THIS_DIR / "views" / "service.py"), title="Service"),
 ]
 
 if me is None:
     # Not authed — show login + policy pages
     pages = [
-        st.Page(str(THIS_DIR / "views" / "login.py"), title="Sign in", icon="🔐", default=True),
+        st.Page(str(THIS_DIR / "views" / "login.py"), title="Sign in", default=True),
         *policy_pages,
     ]
 else:
     pages = [
-        st.Page(str(THIS_DIR / "views" / "dashboard.py"), title="Dashboard", icon="📊", default=True),
-        st.Page(str(THIS_DIR / "views" / "create.py"),    title="Create",    icon="🚀"),
-        st.Page(str(THIS_DIR / "views" / "preview.py"),   title="Preview",   icon="👁️"),
-        st.Page(str(THIS_DIR / "views" / "manage.py"),    title="Manage",    icon="🎛️"),
-        st.Page(str(THIS_DIR / "views" / "account.py"),   title="Account",   icon="⚙️"),
+        st.Page(str(THIS_DIR / "views" / "dashboard.py"), title="Dashboard", default=True),
+        st.Page(str(THIS_DIR / "views" / "create.py"),    title="Create"),
+        st.Page(str(THIS_DIR / "views" / "preview.py"),   title="Preview"),
+        st.Page(str(THIS_DIR / "views" / "manage.py"),    title="Manage"),
+        st.Page(str(THIS_DIR / "views" / "account.py"),   title="Account"),
         *policy_pages,
     ]
     # Admin tab — visible ONLY to users flagged is_admin = 1 in the DB.
     # ADMIN_PASSWORD acts as a backup gate inside admin.py for emergency access
     # via direct URL, but the tab itself never appears in the nav for customers.
     if me.get("is_admin"):
-        pages.append(st.Page(str(THIS_DIR / "views" / "admin.py"), title="Admin", icon="🛡️"))
+        pages.append(st.Page(str(THIS_DIR / "views" / "admin.py"), title="Admin"))
 
 nav = st.navigation(pages, position="top")
 nav.run()

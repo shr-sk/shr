@@ -4,10 +4,19 @@ Razorpay's documentation calls this "Shipping Policy". For a SaaS that
 delivers a digital service (no physical goods), this is the equivalent
 document — clarifying when and how the service is delivered.
 """
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "dashboard"))
+
 import streamlit as st
 
-st.title("Service Delivery Policy")
-st.caption("Last updated: 17 May 2026")
+from styles import hero, inject_css
+
+inject_css()
+
+hero("Service Delivery Policy", kicker="Last updated 17 May 2026")
 
 st.markdown("""
 ## 1. Nature of the Service

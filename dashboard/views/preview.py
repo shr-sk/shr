@@ -15,11 +15,18 @@ from auth.gate import gate
 me = gate()
 
 from preview_mockups import surfaces_for
+from styles import hero, inject_css
+
+inject_css()
 
 ss = st.session_state
 
 
-st.title("Preview")
+hero(
+    "Preview",
+    kicker="Step 2 of 3",
+    subtitle="See how your ad will look across Facebook, Instagram, Stories, Reels, and the Instant Form.",
+)
 
 data = ss.get("preview_data")
 if not data:
@@ -30,10 +37,15 @@ if not data:
     st.stop()
 
 destination = data.get("destination", "Website")
-st.caption(
-    f"Destination: **{destination}** · "
-    f"Business: **{data.get('business_name', '—')}** · "
-    f"Currency: **{data.get('currency', 'USD')}**"
+
+# Inline meta-line under the hero — destination · business · currency
+st.markdown(
+    f"<div style='display:flex;gap:18px;color:#54595F;font-size:13px;margin-bottom:6px;'>"
+    f"<span><strong style='color:#1C1E21;'>Destination</strong> · {destination}</span>"
+    f"<span><strong style='color:#1C1E21;'>Business</strong> · {data.get('business_name', '—')}</span>"
+    f"<span><strong style='color:#1C1E21;'>Currency</strong> · {data.get('currency', 'USD')}</span>"
+    f"</div>",
+    unsafe_allow_html=True,
 )
 st.divider()
 

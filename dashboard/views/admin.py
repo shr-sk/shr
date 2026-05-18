@@ -18,6 +18,9 @@ import streamlit as st
 
 from auth import auth as auth_mod
 from auth import db
+from styles import hero, inject_css, status_pill
+
+inject_css()
 
 
 # ---------- Gate ----------
@@ -42,9 +45,9 @@ def _password_gate():
     if ss.admin_authed:
         return
 
-    st.title("Admin")
+    hero("Admin", kicker="Restricted", subtitle="Enter the admin password to continue.")
     pw = st.text_input("Admin password", type="password")
-    if st.button("Enter"):
+    if st.button("Enter", type="primary"):
         if pw == expected:
             ss.admin_authed = True
             st.rerun()
@@ -57,8 +60,11 @@ _password_gate()
 
 
 # ---------- Panel ----------
-st.title("Admin · Users & Subscriptions")
-st.caption("Manage agency tier upgrades and manual subscription overrides.")
+hero(
+    "Admin",
+    kicker="Users & subscriptions",
+    subtitle="Apply agency tier upgrades and manual subscription extensions.",
+)
 
 users = db.list_users()
 if not users:
@@ -76,7 +82,13 @@ for u in filtered:
     with st.container(border=True):
         c1, c2 = st.columns([2, 1])
         with c1:
-            st.markdown(f"**{u['email']}**")
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:10px;'>"
+                f"<span style='font-weight:600;font-size:15px;'>{u['email']}</span>"
+                f"{status_pill(u.get('sub_status') or 'unknown')}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
             st.caption(
                 f"id={u['id']} · currency={u['currency']} · tier=`{u['tier']}` · "
                 f"client_limit={u['client_limit']} · seats={u['team_seats']} · "
@@ -84,7 +96,7 @@ for u in filtered:
             )
             st.caption(
                 f"created {u['created_at'][:10]} · trial ends {u['trial_ends_at'][:10]} · "
-                f"sub status: **{u.get('sub_status') or '—'}** · period end: {(u.get('current_period_end') or '—')[:10]}"
+                f"period end: {(u.get('current_period_end') or '—')[:10]}"
             )
         with c2:
             # Quick actions
@@ -101,13 +113,13 @@ for u in filtered:
                 "agency_pro": (25, 5),
             }
             new_limit, new_seats = limits[tier]
-            if st.button("Apply tier", key=f"apply-{u['id']}"):
+            if st.button("Apply tier", key=f"apply-{u['id']}", use_container_width=True):
                 db.update_user_tier(u["id"], tier, new_limit, new_seats)
                 st.success(f"Updated to {tier} ({new_limit} clients, {new_seats} seats).")
                 st.rerun()
 
             days = st.number_input("Extend (days)", min_value=1, max_value=365, value=30, key=f"days-{u['id']}")
-            if st.button("Mark paid · extend", key=f"extend-{u['id']}"):
+            if st.button("Mark paid · extend", key=f"extend-{u['id']}", type="primary", use_container_width=True):
                 db.extend_subscription(u["id"], days=int(days))
                 st.success(f"Extended by {days} days.")
                 st.rerun()

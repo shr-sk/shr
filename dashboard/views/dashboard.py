@@ -18,6 +18,9 @@ from benchmark_bridge import run_benchmark, summary_lines
 from demo_data import demo_ad_account_id, demo_rows
 from live_fetcher import fetch_account_totals, fetch_campaigns
 from presets import CURRENCY, CURRENCY_CHOICES
+from styles import hero, inject_css, status_pill
+
+inject_css()
 
 
 ss = st.session_state
@@ -29,16 +32,17 @@ ss.setdefault("demo_campaign_status", "ACTIVE")
 
 # ---------- Sidebar ----------
 with st.sidebar:
+    st.markdown("**Workspace**")
     ss.currency = st.radio("Currency", CURRENCY_CHOICES, horizontal=True, index=CURRENCY_CHOICES.index(ss.currency))
     sym = CURRENCY[ss.currency]["symbol"]
     st.divider()
 
     ss.demo_mode = st.toggle("Demo mode", value=ss.demo_mode)
     if ss.demo_mode:
-        st.caption(f"Fake data — 1 campaign in {ss.currency}.")
+        st.caption(f"Showing sample data in {ss.currency}.")
     st.divider()
 
-    st.subheader("Account")
+    st.markdown("**Account**")
     if ss.demo_mode:
         st.text_input("Ad Account ID", value=demo_ad_account_id(ss.currency), disabled=True)
     else:
@@ -52,8 +56,12 @@ with st.sidebar:
     )
 
 
-# ---------- Data ----------
-st.title("Dashboard")
+# ---------- Hero ----------
+hero(
+    "Dashboard",
+    kicker=f"Signed in as {me['email']}",
+    subtitle="Live KPIs from your connected Meta Ad Account. Switch demo mode off in the sidebar to load real data.",
+)
 
 
 @st.cache_data(ttl=60, show_spinner="Loading…")
@@ -115,7 +123,7 @@ website_zero_conv = any(
 )
 if not ss.demo_mode and website_zero_conv:
     st.warning(
-        "**Website ad has clicks but no conversions.** "
+        "Website ad has clicks but no conversions. "
         "Install Meta Pixel + Purchase event on the landing page to track CAC / ROAS, "
         "or run an Instant Form ad instead (native conversion tracking)."
     )
@@ -125,10 +133,11 @@ st.divider()
 
 
 # ---------- Running table ----------
-st.subheader("Running")
+st.subheader("Running campaigns")
 if not rows:
     st.info("No campaigns in this window.")
 else:
+    # Build an HTML-friendly row set so we can render status as a pill (no emoji).
     data = [
         {
             "Campaign": r.name,
@@ -157,6 +166,17 @@ else:
         },
     )
 
+    # Status pills underneath — gives a clean colour-dot view per campaign.
+    pill_html = " &nbsp; ".join(
+        f"<span style='font-size:12px;color:#54595F;margin-right:4px;'>{r.name[:32]}</span>"
+        f"{status_pill(r.status)}"
+        for r in rows
+    )
+    st.markdown(
+        f"<div style='margin-top:6px;'>{pill_html}</div>",
+        unsafe_allow_html=True,
+    )
+
 
 st.divider()
 with st.expander("Benchmark report", expanded=False):
@@ -164,7 +184,7 @@ with st.expander("Benchmark report", expanded=False):
         st.caption("Benchmark uses the live account; available once Demo mode is off.")
     else:
         bench_window = st.selectbox("Lookback (days)", [7, 30, 90], index=1, key="bench_lookback")
-        if st.button("Run benchmark"):
+        if st.button("Run benchmark", type="primary"):
             try:
                 with st.spinner("Running benchmark…"):
                     report = run_benchmark(

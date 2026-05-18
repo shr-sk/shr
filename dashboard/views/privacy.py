@@ -1,8 +1,17 @@
 """Privacy Policy — public page (no auth required)."""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "dashboard"))
+
 import streamlit as st
 
-st.title("Privacy Policy")
-st.caption("Last updated: 17 May 2026")
+from styles import hero, inject_css
+
+inject_css()
+
+hero("Privacy Policy", kicker="Last updated 17 May 2026")
 
 st.markdown("""
 ## 1. Who we are
