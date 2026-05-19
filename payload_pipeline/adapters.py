@@ -125,6 +125,15 @@ class MetaAdapter:
 
         refs: dict[str, str] = {}
 
+        # Meta's API is not transactional. If a later step fails (e.g. the ad
+        # rejects the IG actor ID) the campaign + ad_set we already created
+        # become orphans that show up in Manage/Dashboard forever. We track
+        # everything we create and delete in reverse on any failure so the
+        # account stays clean. Lead form is tracked separately because it's
+        # created before the operations loop.
+        created: list[tuple[str, str]] = []
+        created_form_id: str | None = None
+
         # If the spec carries a lead_form config, create the form FIRST and
         # register its id so the placeholder in the ad creative gets substituted.
         if spec is not None and getattr(spec, "lead_form", None) is not None:
@@ -152,33 +161,57 @@ class MetaAdapter:
                     out.write(f"  -> FAILED: {type(e).__name__}: {e}\n")
                     raise
                 out.write(f"  -> form_id: {form_id}\n\n")
+                created_form_id = form_id
             refs["REPLACE_AFTER_LEAD_FORM_CREATED"] = form_id
 
-        for i, op in enumerate(operations, 1):
-            payload = _substitute(op["payload"], refs)
-            url = f"https://graph.facebook.com/{self.api_version}/{op['endpoint']}"
-            out.write(f"--- Step {i}: POST /{op['endpoint']} ---\n")
-            try:
-                resource_id = self._post(url, payload)
-            except Exception as e:
-                out.write(f"  -> FAILED: {type(e).__name__}: {e}\n")
-                raise
-            out.write(f"  -> id: {resource_id or '(empty — validate_only success)'}\n")
+        try:
+            for i, op in enumerate(operations, 1):
+                payload = _substitute(op["payload"], refs)
+                url = f"https://graph.facebook.com/{self.api_version}/{op['endpoint']}"
+                out.write(f"--- Step {i}: POST /{op['endpoint']} ---\n")
+                try:
+                    resource_id = self._post(url, payload)
+                except Exception as e:
+                    out.write(f"  -> FAILED: {type(e).__name__}: {e}\n")
+                    raise
+                out.write(f"  -> id: {resource_id or '(empty — validate_only success)'}\n")
 
-            ref_key = op.get("ref_key")
-            if ref_key in _PLACEHOLDERS and resource_id:
-                refs[_PLACEHOLDERS[ref_key]] = resource_id
-            elif ref_key in _PLACEHOLDERS and self.validate_only and not resource_id:
-                # Meta's validate_only succeeds but returns no id, so we can't
-                # validate later steps that reference this one. Stop here with a
-                # clear message instead of cascading 'Invalid id' errors.
-                out.write(
-                    "\n  Stopping early: subsequent steps reference this id, but "
-                    "validate_only mode doesn't return real ids. To validate the "
-                    "full chain, use live mode (--adapter meta, no --validate-only). "
-                    "It creates resources at status=PAUSED in your sandbox — safe.\n"
-                )
-                break
+                if resource_id and not self.validate_only:
+                    created.append((op["resource_type"], resource_id))
+
+                ref_key = op.get("ref_key")
+                if ref_key in _PLACEHOLDERS and resource_id:
+                    refs[_PLACEHOLDERS[ref_key]] = resource_id
+                elif ref_key in _PLACEHOLDERS and self.validate_only and not resource_id:
+                    # Meta's validate_only succeeds but returns no id, so we can't
+                    # validate later steps that reference this one. Stop here with a
+                    # clear message instead of cascading 'Invalid id' errors.
+                    out.write(
+                        "\n  Stopping early: subsequent steps reference this id, but "
+                        "validate_only mode doesn't return real ids. To validate the "
+                        "full chain, use live mode (--adapter meta, no --validate-only). "
+                        "It creates resources at status=PAUSED in your sandbox — safe.\n"
+                    )
+                    break
+        except Exception:
+            # Roll back anything we already created on Meta. Best-effort —
+            # individual delete failures are logged but never raised, so we
+            # still propagate the ORIGINAL error to the caller.
+            if not self.validate_only and (created or created_form_id):
+                out.write("\n--- Cleanup: removing partially-created resources ---\n")
+                for rtype, rid in reversed(created):
+                    try:
+                        self._delete(rid)
+                        out.write(f"  deleted {rtype} {rid}\n")
+                    except Exception as ce:
+                        out.write(f"  could not delete {rtype} {rid}: {ce}\n")
+                if created_form_id:
+                    try:
+                        self._delete(created_form_id)
+                        out.write(f"  deleted lead_form {created_form_id}\n")
+                    except Exception as ce:
+                        out.write(f"  could not delete lead_form {created_form_id}: {ce}\n")
+            raise
 
         out.write(f"\n=== {mode} RUN COMPLETE — "
                   f"{'nothing created' if self.validate_only else 'campaign at PAUSED'}. ===\n")
@@ -205,6 +238,18 @@ class MetaAdapter:
         except json.JSONDecodeError:
             raise RuntimeError(f"non-JSON response: {response.text[:300]}")
         return data.get("id", "")  # may be empty in validate_only on some endpoints
+
+    def _delete(self, resource_id: str) -> None:
+        """DELETE a resource (campaign / ad_set / ad / lead form) on Meta.
+        Used for transactional cleanup when a multi-step launch fails partway."""
+        import requests
+        response = requests.delete(
+            f"https://graph.facebook.com/{self.api_version}/{resource_id}",
+            params={"access_token": self.access_token},
+            timeout=30,
+        )
+        if response.status_code != 200:
+            raise RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
 
     def _check_pilot_guard(self, operations: list[dict]) -> None:
         # Explicit override — for pilots that DO have Pixel + CAPI verified.

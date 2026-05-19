@@ -85,10 +85,15 @@ def fetch_campaigns(
     api_ver = "v20.0"
     base = f"https://graph.facebook.com/{api_ver}/act_{ad_account_id}"
 
+    # `destination_type` lives on the ad_set, NOT on the campaign — asking for
+    # it here returns nothing. We derive destination from `objective` instead:
+    # OUTCOME_LEADS = Lead Form, anything else = Website. This matches what
+    # yaml_render.py writes (final_objective = OUTCOME_LEADS for Lead Form,
+    # OUTCOME_TRAFFIC for Website).
     campaigns_resp = requests.get(
         f"{base}/campaigns",
         params={
-            "fields": "id,name,status,objective,destination_type",
+            "fields": "id,name,status,objective",
             "access_token": token,
             "limit": 200,
         },
@@ -113,13 +118,13 @@ def fetch_campaigns(
         ins = data[0] if data else {}
 
         # Conversion logic:
-        #   • For Lead Form ads (destination_type=ON_AD), look for actions[lead].
+        #   • For Lead Form ads, look for actions[lead].
         #   • For Website ads, look for actions[offsite_conversion.fb_pixel_purchase]
         #     or actions[purchase].
         conversions = 0.0
         conversion_value = 0.0
-        destination_type = (c.get("destination_type") or "").upper()
-        destination = "Lead Form" if destination_type == "ON_AD" else "Website"
+        objective = (c.get("objective") or "").upper()
+        destination = "Lead Form" if objective == "OUTCOME_LEADS" else "Website"
 
         for a in ins.get("actions", []) or []:
             t = a.get("action_type", "")
