@@ -11,7 +11,6 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "payload_pipeline"))
 
 import streamlit as st
-import yaml
 
 from auth.gate import gate
 
@@ -78,7 +77,6 @@ fbq('track', 'Purchase', {
 ss = st.session_state
 ss.setdefault("currency", "USD")
 ss.setdefault("rendered_yaml", None)
-ss.setdefault("mock_output", "")
 ss.setdefault("ad_copy", None)
 ss.setdefault("epicenters", [])
 ss.setdefault("uploaded_files", {})
@@ -227,10 +225,13 @@ st.divider()
 # B. Account IDs
 # ============================================================================
 section_label("Account")
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 ad_account_id = c1.text_input("Ad Account ID", value=scenario["ad_account_id"])
 page_id = c2.text_input("Facebook Page ID", value=scenario["page_id"])
-instagram_actor_id = c3.text_input("Instagram Actor ID", value=scenario.get("instagram_actor_id", ""), placeholder="optional")
+st.caption(
+    "Instagram delivery uses the IG account linked to this Facebook Page "
+    "(Page Settings → Linked Accounts). No separate ID needed."
+)
 
 st.divider()
 
@@ -323,7 +324,15 @@ if destination == "Lead Form":
     with st.expander("Lead form config", expanded=False):
         c1, c2 = st.columns(2)
         lf_name = c1.text_input("Form name", value=f"{business_name} — Lead form")
-        lf_privacy = c2.text_input("Privacy policy URL", value="https://example.com/privacy")
+        lf_privacy = c2.text_input(
+            "Privacy policy URL",
+            value="https://adsmeta.streamlit.app/privacy",
+            help=(
+                "Meta requires a valid public privacy policy URL. "
+                "Replace with your own business privacy page if you have one — "
+                "otherwise this app's privacy page is a valid fallback."
+            ),
+        )
         lf_thanks = st.text_input("Thank-you message", value="Thanks! We'll be in touch within 24 hours.")
         questions = st.multiselect(
             "Prefilled questions",
@@ -367,7 +376,7 @@ launch_status = st.radio(
 )
 ss["launch_status"] = launch_status
 
-btn_build, btn_mock, btn_live = st.columns(3)
+btn_build, btn_live = st.columns(2)
 
 
 def _problems() -> list[str]:
@@ -401,7 +410,7 @@ def _image_paths_by_aspect():
         st.warning(
             f"{len(dead_keys)} previously-uploaded file(s) are no longer on the "
             f"server (Streamlit Cloud wipes uploads on every restart). Please "
-            f"re-upload them above and click Build YAML again."
+            f"re-upload them above and click View report again."
         )
     for entry in ss.uploaded_files.values():
         if entry["kind"] != "image":
@@ -410,7 +419,7 @@ def _image_paths_by_aspect():
     return out
 
 
-# Hash cache — avoid re-uploading the same file when user clicks Build YAML twice.
+# Hash cache — avoid re-uploading the same file when user clicks View report twice.
 # Keyed by (local_path, mode) so flipping demo mode forces a re-upload (different
 # hashes — MD5 vs real Meta hash).
 ss.setdefault("image_hash_cache", {})
@@ -444,7 +453,7 @@ def _ensure_image_hash(entry: dict, ad_account_id: str, use_mock: bool) -> str |
         return None
 
 
-if btn_build.button("Build YAML", type="primary", use_container_width=True):
+if btn_build.button("View report", type="primary", use_container_width=True):
     problems = _problems()
     if problems:
         for x in problems:
@@ -455,7 +464,6 @@ if btn_build.button("Build YAML", type="primary", use_container_width=True):
             "website_url": website_url,
             "ad_account_id": ad_account_id.replace("-", "").strip(),
             "page_id": page_id.strip(),
-            "instagram_actor_id": instagram_actor_id.strip(),
         }
         try:
             city_names = [c.strip() for c in cities_text.split(",") if c.strip()]
@@ -554,7 +562,6 @@ if btn_build.button("Build YAML", type="primary", use_container_width=True):
             )
 
             ss.rendered_yaml = yaml_dict
-            ss.mock_output = ""
 
             ss.preview_data = {
                 "destination": destination,
@@ -567,26 +574,7 @@ if btn_build.button("Build YAML", type="primary", use_container_width=True):
                 "currency": ss.currency,
             }
         except Exception as e:
-            import traceback
-            st.error(f"Build failed: {type(e).__name__}: {e}")
-            with st.expander("Full error trace (debugging)", expanded=True):
-                st.code(traceback.format_exc(), language="text")
-
-
-if btn_mock.button("Run mock", use_container_width=True, disabled=ss.rendered_yaml is None):
-    try:
-        from adapters import get_adapter  # type: ignore[import-not-found]
-        from builders import build_all  # type: ignore[import-not-found]
-        from validate import validate  # type: ignore[import-not-found]
-
-        spec = validate(ss.rendered_yaml)
-        operations = build_all(spec)
-        buf = StringIO()
-        adapter = get_adapter("mock", spec.ad_account_id)
-        adapter.run(operations, stream=buf, spec=spec)
-        ss.mock_output = buf.getvalue()
-    except Exception as e:
-        st.error(str(e))
+            st.error(f"Could not build the report: {e}")
 
 
 # ---------- Launch to Meta (live) ----------
@@ -595,7 +583,7 @@ import os as _os  # local — only needed for the token check
 
 _live_disabled_reason = None
 if ss.rendered_yaml is None:
-    _live_disabled_reason = "Click **Build YAML** first."
+    _live_disabled_reason = "Click **View report** first."
 elif ss.get("demo_mode", True):
     _live_disabled_reason = "Turn **Demo mode** OFF (sidebar) — live launch needs real image hashes."
 elif not _os.environ.get("META_ACCESS_TOKEN"):
@@ -643,11 +631,11 @@ if _live_disabled_reason and ss.rendered_yaml is not None:
 # Confirmation dialog when launching ACTIVE — real money guard
 if ss.confirm_active_launch:
     with st.container(border=True):
+        _daily_major = ss.rendered_yaml.get("ad_set", {}).get("daily_budget", 0) / 100
         st.warning(
-            f"**Launch as ACTIVE on `act_{ss.rendered_yaml.get('ad_account_id', '')}`?**  \n"
-            "Spending will begin within ~30 minutes. Daily budget = "
-            f"{ss.rendered_yaml.get('ad_set', {}).get('daily_budget', 0) / 100:.2f} "
-            f"(in minor units, divide by 100 for INR or USD)."
+            f"**Launch this campaign as ACTIVE?**  \n"
+            f"Real spending begins within ~30 minutes at **{sym}{_daily_major:,.2f}/day**. "
+            "You can pause it anytime from the Manage tab."
         )
         c1, c2 = st.columns(2)
         if c1.button("Yes, launch ACTIVE", type="primary"):
@@ -676,64 +664,228 @@ if ss.confirm_active_launch:
 
 # Surface launch result / error
 if ss.get("launch_result"):
-    st.success("Live launch complete.")
-    with st.expander("Launch output (real Meta API responses)", expanded=True):
-        st.code(ss.launch_result, language="text")
+    st.success(
+        "Campaign sent to Meta. Check your Meta Ads Manager — the campaign, "
+        "ad set, and ad have been created at the status you chose."
+    )
 if ss.get("launch_error"):
-    st.error(f"Launch failed: {ss.launch_error}")
+    st.error(f"Launch could not be sent to Meta. Reason: {ss.launch_error}")
 
 
-if ss.ad_copy:
-    with st.expander("Generated copy + targeting", expanded=False):
-        st.json(ss.ad_copy)
+# ============================================================================
+# Campaign report — single human-readable summary of what's going to Meta.
+# Replaces the raw YAML / JSON / hash expanders. Renders only after the user
+# clicks "View report" (which populates ss.rendered_yaml).
+# ============================================================================
+if ss.rendered_yaml:
+    yd = ss.rendered_yaml
+    cmp_ = yd.get("campaign", {})
+    aset = yd.get("ad_set", {})
+    targ = aset.get("targeting", {})
+    geo = targ.get("geo_locations", {})
+    link_data = (yd.get("ad", {}).get("creative", {})
+                 .get("object_story_spec", {}).get("link_data", {}))
+    cta = link_data.get("call_to_action", {})
+    lf = yd.get("lead_form")
 
-if ss.image_hash_cache:
-    with st.expander("Image hashes", expanded=False):
-        rows = [
-            {
-                "File": Path(path).name,
-                "Mode": mode,
-                "image_hash": h,
-            }
-            for (path, mode), h in ss.image_hash_cache.items()
-        ]
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+    obj_label = {
+        "OUTCOME_TRAFFIC": "Drive clicks to your website",
+        "OUTCOME_LEADS":   "Collect leads via Instant Form",
+    }.get(cmp_.get("objective", ""), cmp_.get("objective", "—"))
 
-if ss.epicenters:
-    n = len(ss.epicenters)
-    total_km2 = sum(3.14159 * (e["radius_km"] ** 2) for e in ss.epicenters)
-    with st.expander(
-        f"Resolved targeting — {n} cluster{'s' if n != 1 else ''} · "
-        f"~{total_km2:,.0f} km² total coverage",
-        expanded=True,
-    ):
-        # Pretty per-cluster cards rather than a raw dataframe — the "why"
-        # field is the bit that helps users sanity-check before launch.
-        for e in ss.epicenters:
+    daily_major = aset.get("daily_budget", 0) / 100
+    spend_cap_major = (cmp_.get("spend_cap", 0) or 0) / 100
+    monthly_est = daily_major * 30
+
+    genders_v = targ.get("genders") or []
+    if genders_v == [1]:
+        gender_label = "Male only"
+    elif genders_v == [2]:
+        gender_label = "Female only"
+    else:
+        gender_label = "Any (men & women)"
+
+    locales = targ.get("locales") or []
+    lang_label = "English" if not locales else f"Locales: {', '.join(map(str, locales))}"
+
+    plats = targ.get("publisher_platforms", []) or []
+    plat_label = " · ".join(p.title() for p in plats) or "—"
+
+    section_label("Campaign report")
+    st.caption(
+        "This is exactly what will be sent to Meta when you click Launch. "
+        "Review it carefully — once Active, real spending begins within ~30 minutes."
+    )
+
+    with st.container(border=True):
+        # ---- Top strip: status · objective · currency ----
+        st.markdown(
+            f"<div style='display:flex;flex-wrap:wrap;gap:18px;align-items:center;"
+            f"font-size:13px;color:#54595F;'>"
+            f"<span><strong style='color:#1C1E21;'>Status</strong> · "
+            f"{cmp_.get('status', '—')}</span>"
+            f"<span><strong style='color:#1C1E21;'>Goal</strong> · {obj_label}</span>"
+            f"<span><strong style='color:#1C1E21;'>Business</strong> · "
+            f"{business_name or '—'}</span>"
+            f"<span><strong style='color:#1C1E21;'>Currency</strong> · {ss.currency}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("---")
+
+        # ---- Where the ad will run (location resolver report) ----
+        st.markdown("##### Where your ad will be shown")
+        if ss.epicenters:
+            n = len(ss.epicenters)
+            total_km2 = sum(3.14159 * (e["radius_km"] ** 2) for e in ss.epicenters)
             st.markdown(
-                f"<div style='border-left:3px solid #1877F2;padding:8px 12px;"
-                f"margin:6px 0;background:#F4F6F8;border-radius:0 8px 8px 0;'>"
-                f"<div style='font-weight:600;color:#1C1E21;'>{e['name']}</div>"
-                f"<div style='color:#54595F;font-size:13px;margin-top:2px;'>"
-                f"<code style='font-size:12px;'>{e['lat']:.4f}, {e['lng']:.4f}</code> · "
-                f"radius {e['radius_km']:.1f} km</div>"
-                f"<div style='color:#54595F;font-size:13px;margin-top:4px;font-style:italic;'>"
-                f"{e.get('why', '')}</div>"
+                f"<div style='color:#54595F;font-size:13px;margin-bottom:8px;'>"
+                f"{n} target cluster{'s' if n != 1 else ''} · "
+                f"~{total_km2:,.0f} km² total coverage. Only people inside these "
+                f"circles will see the ad.</div>",
+                unsafe_allow_html=True,
+            )
+            for e in ss.epicenters:
+                st.markdown(
+                    f"<div style='border-left:3px solid #1877F2;padding:8px 12px;"
+                    f"margin:6px 0;background:#F4F6F8;border-radius:0 8px 8px 0;'>"
+                    f"<div style='font-weight:600;color:#1C1E21;'>{e['name']}</div>"
+                    f"<div style='color:#54595F;font-size:13px;margin-top:2px;'>"
+                    f"radius {e['radius_km']:.1f} km</div>"
+                    f"<div style='color:#54595F;font-size:13px;margin-top:4px;"
+                    f"font-style:italic;'>{e.get('why', '')}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            countries = geo.get("countries") or []
+            st.markdown(
+                f"<div style='color:#54595F;font-size:13px;'>"
+                f"Country-wide: <strong style='color:#1C1E21;'>"
+                f"{', '.join(countries) or '—'}</strong>. The ad will show to anyone "
+                f"in the country matching the age, gender, and placement filters below."
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
-if ss.rendered_yaml:
-    with st.expander("YAML preview", expanded=False):
-        yaml_text = yaml.safe_dump(ss.rendered_yaml, sort_keys=False, indent=2)
-        st.code(yaml_text, language="yaml")
-        st.download_button(
-            "Download YAML",
-            data=yaml_text,
-            file_name=f"{(business_name or 'campaign').replace(' ', '_').lower()}.yaml",
-            mime="text/yaml",
+        st.markdown("---")
+
+        # ---- Audience ----
+        st.markdown("##### Who will see it")
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(
+            f"<div style='font-size:12px;color:#54595F;'>AGE</div>"
+            f"<div style='font-size:16px;font-weight:600;color:#1C1E21;'>"
+            f"{targ.get('age_min', 18)} – {targ.get('age_max', 65)}</div>",
+            unsafe_allow_html=True,
+        )
+        c2.markdown(
+            f"<div style='font-size:12px;color:#54595F;'>GENDER</div>"
+            f"<div style='font-size:16px;font-weight:600;color:#1C1E21;'>{gender_label}</div>",
+            unsafe_allow_html=True,
+        )
+        c3.markdown(
+            f"<div style='font-size:12px;color:#54595F;'>LANGUAGE</div>"
+            f"<div style='font-size:16px;font-weight:600;color:#1C1E21;'>{lang_label}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div style='margin-top:10px;font-size:13px;color:#54595F;'>"
+            f"<strong style='color:#1C1E21;'>Placements</strong> · {plat_label} "
+            f"(feed, stories, reels)</div>",
+            unsafe_allow_html=True,
         )
 
-if ss.mock_output:
-    with st.expander("Mock launcher output", expanded=False):
-        st.code(ss.mock_output, language="text")
+        st.markdown("---")
+
+        # ---- Budget ----
+        st.markdown("##### Budget")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Daily", f"{sym}{daily_major:,.2f}")
+        c2.metric("Monthly estimate", f"{sym}{monthly_est:,.0f}")
+        c3.metric("Safety cap", f"{sym}{spend_cap_major:,.0f}")
+        st.caption(
+            f"Bid strategy: {aset.get('bid_strategy', '—')}. Meta will never spend "
+            f"more than the safety cap, even if a campaign runs longer than planned."
+        )
+
+        st.markdown("---")
+
+        # ---- Creative ----
+        st.markdown("##### What people will see")
+        st.markdown(
+            f"<div style='font-size:12px;color:#54595F;margin-top:6px;'>PRIMARY TEXT</div>"
+            f"<div style='font-size:14px;color:#1C1E21;background:#F4F6F8;"
+            f"padding:10px 12px;border-radius:8px;'>{link_data.get('message', '—')}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div style='font-size:12px;color:#54595F;margin-top:10px;'>HEADLINE</div>"
+            f"<div style='font-size:15px;font-weight:600;color:#1C1E21;'>"
+            f"{link_data.get('name', '—')}</div>",
+            unsafe_allow_html=True,
+        )
+        if link_data.get("description"):
+            st.markdown(
+                f"<div style='font-size:12px;color:#54595F;margin-top:10px;'>DESCRIPTION</div>"
+                f"<div style='font-size:14px;color:#1C1E21;'>{link_data['description']}</div>",
+                unsafe_allow_html=True,
+            )
+        cta_pretty = cta.get("type", "—").replace("_", " ").title()
+        st.markdown(
+            f"<div style='font-size:12px;color:#54595F;margin-top:10px;'>"
+            f"BUTTON · CLICK TAKES THEM TO</div>"
+            f"<div style='font-size:14px;color:#1C1E21;'>"
+            f"<strong>{cta_pretty}</strong>"
+            f" → {('Lead form (filled inside Meta)' if lf else link_data.get('link', '—'))}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        # ---- Lead form (if applicable) ----
+        if lf:
+            st.markdown("---")
+            st.markdown("##### Lead form")
+            c1, c2 = st.columns(2)
+            c1.markdown(
+                f"<div style='font-size:12px;color:#54595F;'>FORM NAME</div>"
+                f"<div style='font-size:14px;color:#1C1E21;'>{lf.get('name', '—')}</div>",
+                unsafe_allow_html=True,
+            )
+            c2.markdown(
+                f"<div style='font-size:12px;color:#54595F;'>PRIVACY POLICY</div>"
+                f"<div style='font-size:14px;color:#1C1E21;'>"
+                f"<a href='{lf.get('privacy_url', '#')}' target='_blank'>"
+                f"{lf.get('privacy_url', '—')}</a></div>",
+                unsafe_allow_html=True,
+            )
+            fields = lf.get("prefilled_questions") or []
+            st.markdown(
+                f"<div style='font-size:12px;color:#54595F;margin-top:10px;'>"
+                f"FIELDS COLLECTED</div>"
+                f"<div style='font-size:14px;color:#1C1E21;'>"
+                f"{', '.join(f.replace('_', ' ').title() for f in fields) or '—'}</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"<div style='font-size:12px;color:#54595F;margin-top:10px;'>"
+                f"THANK-YOU MESSAGE</div>"
+                f"<div style='font-size:14px;color:#1C1E21;font-style:italic;'>"
+                f"{lf.get('thank_you_message', '—')}</div>",
+                unsafe_allow_html=True,
+            )
+
+        # ---- Creative files ----
+        images = [v for v in ss.uploaded_files.values() if v["kind"] == "image"]
+        if images:
+            st.markdown("---")
+            st.markdown("##### Uploaded creative files")
+            cols = st.columns(min(len(images), 3))
+            for i, img in enumerate(images):
+                with cols[i % len(cols)]:
+                    p = Path(img["local_path"])
+                    if p.exists():
+                        st.image(str(p), caption=f"{p.name} · {img['aspect']}", use_container_width=True)
+                    else:
+                        st.caption(f"{p.name} · {img['aspect']} (file lost on restart)")

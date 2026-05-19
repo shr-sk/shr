@@ -32,7 +32,7 @@ data = ss.get("preview_data")
 if not data:
     st.info(
         "Build a campaign on the **Create** tab first. After you click "
-        "*Build YAML*, the preview populates here."
+        "*View report*, the preview populates here."
     )
     st.stop()
 
